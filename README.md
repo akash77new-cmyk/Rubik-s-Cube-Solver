@@ -20,23 +20,6 @@ The application scans a physical 3×3 Rubik's Cube using a webcam, reconstructs 
 
 ---
 
-# Demo
-
-> *(Add screenshots or GIFs here after completing the repository.)*
-
-```
-docs/demo.gif
-```
-
-Suggested screenshots:
-
-- Cube Scanner
-- Cube Viewer
-- HSV Calibration Tool
-- Move Guidance Overlay
-
----
-
 # Project Architecture
 
 ```
@@ -75,19 +58,10 @@ Rubiks-Cube-Solver/
 ├── cube_solver.py
 ├── cube_viewer.py
 ├── hsv_calibrator.py
-│
 ├── assets/
 │   ├── arrows/
 │   ├── stickers/
-│   └── screenshots/
-│
-├── docs/
-│   ├── demo.gif
-│   ├── architecture.png
-│   └── workflow.png
-│
 ├── requirements.txt
-├── .gitignore
 └── README.md
 ```
 
@@ -287,22 +261,13 @@ python hsv_calibrator.py
 
 ---
 
-# Acknowledgements
-
-- OpenCV for computer vision utilities
-- Herbert Kociemba for the Two-Phase Algorithm
-- NumPy developers
-- Python Software Foundation
-
----
-
 # Author
 
 **Akash Srivastava**
 
-Computer Science Undergraduate  
+Computer Science Undergraduate (2024-2028)
 BITS Pilani, Hyderabad Campus
 
 ---
 
-## ⭐ If you found this project interesting, consider starring the repository.
+### ⭐ If you found this project interesting, consider starring the repository.
