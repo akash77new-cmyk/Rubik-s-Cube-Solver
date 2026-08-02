@@ -1,0 +1,292 @@
+#!/usr/bin/env python
+"""End-to-end verification of the whole pipeline.
+
+    python tools/verify.py            # offline checks only
+    python tools/verify.py --live     # also drive a running app over Socket.IO
+
+Offline checks need nothing running. The ``--live`` pass expects
+``python run.py --headless`` in another terminal and exercises the real
+browser-facing path: Socket.IO command in, engine event out.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+from pathlib import Path
+from typing import Callable, List, Tuple
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+PASS, FAIL = "PASS", "FAIL"
+results: List[Tuple[str, str, str]] = []
+
+
+def check(name: str) -> Callable:
+    """Decorator that runs a check and records PASS/FAIL plus a detail line."""
+
+    def wrapper(function: Callable[[], str]) -> Callable[[], str]:
+        try:
+            detail = function()
+            results.append((PASS, name, detail))
+        except AssertionError as exc:
+            results.append((FAIL, name, str(exc)))
+        except Exception as exc:  # noqa: BLE001 - report, never abort the suite
+            results.append((FAIL, name, f"{type(exc).__name__}: {exc}"))
+        return function
+
+    return wrapper
+
+
+# ======================================================================
+# Offline checks
+# ======================================================================
+
+def run_offline() -> None:
+    from backend.core.cube import CubeState, random_scramble
+    from backend.core.moves import (
+        expand_for_physical_turns,
+        invert_sequence,
+        parse_sequence,
+    )
+
+    @check("cube model · scramble then inverse returns to solved")
+    def _() -> str:
+        for seed in range(200):
+            scramble = random_scramble(25, seed=seed)
+            state = CubeState.solved().apply_sequence(scramble)
+            assert not state.is_solved, f"seed {seed} produced a solved cube"
+            state = state.apply_sequence(invert_sequence(scramble))
+            assert state.is_solved, f"seed {seed} did not return to solved"
+        return "200 random 25-move scrambles round-tripped"
+
+    @check("cube model · every face turn has order 4")
+    def _() -> str:
+        for face in "URFDLB":
+            state = CubeState.solved()
+            for _ in range(4):
+                state = state.apply(face)
+            assert state.is_solved, f"{face}x4 is not the identity"
+        return "U R F D L B all return to solved after four turns"
+
+    @check("cube model · (R U R' U')x6 is the identity")
+    def _() -> str:
+        state = CubeState.solved().apply_sequence("R U R' U' " * 6)
+        assert state.is_solved, "sexy move x6 did not return to solved"
+        return "well-known 6-cycle verified"
+
+    @check("cube model · validation rejects an impossible cube")
+    def _() -> str:
+        facelets = CubeState.solved().facelets
+        facelets["U"][0] = "R"  # ten reds, eight whites
+        assert not CubeState(facelets).validate().ok, "invalid cube passed validation"
+        return "colour-count violation detected"
+
+    @check("move notation · physical expansion of back-face turns")
+    def _() -> str:
+        cases = {
+            "B": ["TURN_BACK", "F", "TURN_BACK"],
+            "B'": ["TURN_BACK", "F'", "TURN_BACK"],
+            "B2": ["TURN_BACK", "F", "F", "TURN_BACK"],
+            "R2": ["R", "R"],
+            "U'": ["U'"],
+        }
+        for notation, expected in cases.items():
+            actual = expand_for_physical_turns(parse_sequence(notation))
+            assert actual == expected, f"{notation} -> {actual}, expected {expected}"
+        return "B / B' / B2 / R2 / U' expand as the original implementation did"
+
+    # ------------------------------------------------------------------
+    from backend.ipc.protocol import MessageReader, encode_frame, encode_json
+
+    @check("socket protocol · framing survives arbitrary chunk splits")
+    def _() -> str:
+        blob = encode_json({"event": "state"}) + encode_frame(b"\xff\xd8jpeg\xff\xd9") \
+            + encode_json({"event": "log", "data": "x" * 500})
+        reader = MessageReader()
+        messages = []
+        for offset in range(0, len(blob), 7):  # deliberately awkward chunk size
+            messages.extend(reader.feed(blob[offset : offset + 7]))
+        kinds = [kind for kind, _ in messages]
+        assert kinds == [b"J", b"F", b"J"], f"got {kinds}"
+        return "3 messages reassembled from 7-byte chunks"
+
+    # ------------------------------------------------------------------
+    import numpy as np
+    import cv2
+    from backend.vision.detector import FaceDetector
+    from backend.vision.overlay import COLOR_BGR, OverlayRenderer
+    from backend.core.moves import Move
+
+    @check("HSV segmentation · classifies a synthetic cube face")
+    def _() -> str:
+        codes = ["R", "G", "B", "W", "Y", "O", "G", "R", "B"]
+        width, height, spacing = 960, 720, 96
+        frame = np.full((height, width, 3), 28, np.uint8)
+        for index, code in enumerate(codes):
+            row, col = divmod(index, 3)
+            x = width // 2 + (col - 1) * spacing
+            y = height // 2 + (row - 1) * spacing
+            cv2.rectangle(frame, (x - 42, y - 42), (x + 42, y + 42), COLOR_BGR[code], -1)
+
+        detector = FaceDetector(spacing=spacing, sample_radius=10)
+        for _ in range(6):  # fill the stability window
+            result = detector.detect(frame.copy())
+        assert result.colors == codes, f"detected {result.colors}, expected {codes}"
+        assert result.stable, "read never stabilised"
+        return f"9/9 correct, mean confidence {result.mean_confidence:.2f}, stable"
+
+    @check("overlays · HUD and move arrows render without error")
+    def _() -> str:
+        frame = np.full((720, 960, 3), 28, np.uint8)
+        detector = FaceDetector(spacing=96)
+        result = detector.detect(frame)
+        overlay = OverlayRenderer("neon")
+        overlay.draw_detection(frame.copy(), result)
+        overlay.draw_scan_banner(frame.copy(), "F", ["U", "R"], result)
+        for face in "URFDLB":
+            for modifier in ("", "'", "2"):
+                overlay.draw_move(frame.copy(), Move(face, modifier), index=0, total=20)
+        overlay.draw_move(frame.copy(), Move("B"), turn_back=True)
+        return "18 move arrows + scan HUD + turn-back hint drawn"
+
+    # ------------------------------------------------------------------
+    from backend.core.solver import solver_engine
+
+    @check("solver · solutions are correct when replayed onto the cube")
+    def _() -> str:
+        assert solver_engine.warm_up(600), f"solver never became ready: {solver_engine.status()['message']}"
+        lengths = []
+        for length in (6, 12, 18, 25):
+            scramble = random_scramble(length, seed=length)
+            cube = CubeState.solved().apply_sequence(scramble)
+            solution = solver_engine.solve(cube)
+            replayed = cube.apply_sequence(solution.moves)
+            assert replayed.is_solved, f"solution for a {length}-move scramble does not solve it"
+            assert solution.move_count <= 22, f"solution too long: {solution.move_count}"
+            assert len(solution.states) == solution.move_count + 1, "state trace length mismatch"
+            lengths.append(solution.move_count)
+        backend = solver_engine.status()["backend"]
+        return f"4 cubes solved and verified via {backend}; move counts {lengths}"
+
+
+# ======================================================================
+# Live checks
+# ======================================================================
+
+def run_live(url: str) -> None:
+    try:
+        import socketio  # type: ignore
+    except ImportError:
+        results.append((FAIL, "live · socket.io client", "pip install 'python-socketio[client]'"))
+        return
+
+    state: dict = {}
+    logs: list = []
+    client = socketio.Client()
+    client.on("state", lambda data: state.update(data))
+    client.on("log", lambda entry: logs.append(entry))
+
+    def command(name: str, payload: dict | None = None, settle: float = 0.5) -> None:
+        client.emit("command", {"command": name, "payload": payload or {}})
+        time.sleep(settle)
+
+    @check("live · Socket.IO connects and receives a state snapshot")
+    def _() -> str:
+        client.connect(url, wait_timeout=15)
+        time.sleep(1.5)
+        assert state, "no state event received"
+        return f"mode={state['mode']}, solver={state['solver']['backend']}"
+
+    @check("live · scramble produces a valid cube")
+    def _() -> str:
+        command("cube.scramble", {"length": 22})
+        assert state["validation"]["ok"], state["validation"]["errors"]
+        assert state["scan"]["count"] == 6, "scan did not report six faces"
+        return f"source={state['cubeSource']}, centres={''.join(state['cube']['centers'].values())}"
+
+    @check("live · solve returns a solution with a per-move state trace")
+    def _() -> str:
+        command("solve.run")
+        for _ in range(300):
+            if state.get("solution"):
+                break
+            time.sleep(0.1)
+        solution = state.get("solution")
+        assert solution, "no solution arrived"
+        assert len(solution["states"]) == solution["moveCount"] + 1, "state trace mismatch"
+        return f"{solution['moveCount']} moves in {solution['elapsedMs']:.1f} ms"
+
+    @check("live · stepping through playback solves the cube and records analytics")
+    def _() -> str:
+        total = state["solution"]["moveCount"]
+        for _ in range(total):
+            command("playback.next", settle=0.12)
+        time.sleep(0.6)
+        assert state["playback"]["completed"], "playback did not complete"
+        final = CubeStateFromDict(state["playback"]["cube"])
+        assert final.is_solved, "cube is not solved at the end of playback"
+        assert state["analytics"]["totalSolves"] >= 1, "no analytics record written"
+        return f"{total} moves executed, cube verified solved, {state['analytics']['totalSolves']} solve(s) recorded"
+
+    @check("live · calibration and settings round-trip through the engine")
+    def _() -> str:
+        command("calibration.start")
+        command("calibration.target", {"color": "B"})
+        command("calibration.range", {"color": "B", "h_min": 97})
+        assert state["calibration"]["ranges"]["B"]["h_min"] == 97, "HSV edit did not stick"
+        command("calibration.stop")
+        original = state["settings"]["target_fps"]
+        command("settings.update", {"target_fps": 24})
+        assert state["settings"]["target_fps"] == 24, "settings update did not stick"
+        command("settings.update", {"target_fps": original})
+        return "HSV range + settings persisted via the socket bridge"
+
+    @check("live · engine streams structured logs")
+    def _() -> str:
+        assert logs, "no log entries streamed"
+        sources = sorted({entry["source"] for entry in logs})
+        return f"{len(logs)} entries from {sources}"
+
+    try:
+        client.disconnect()
+    except Exception:
+        pass
+
+
+def CubeStateFromDict(facelets):  # noqa: N802 - tiny local helper
+    from backend.core.cube import CubeState
+
+    return CubeState(facelets)
+
+
+# ======================================================================
+
+def main(argv: List[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Verify the cube solver pipeline")
+    parser.add_argument("--live", action="store_true", help="also test a running app")
+    parser.add_argument("--url", default="http://127.0.0.1:8000")
+    args = parser.parse_args(argv)
+
+    print("Rubik's Cube Solver - verification\n" + "=" * 72)
+    run_offline()
+    if args.live:
+        run_live(args.url)
+
+    print()
+    for status, name, detail in results:
+        mark = "✓" if status == PASS else "✗"
+        print(f"  [{mark}] {name}")
+        print(f"      {detail}")
+
+    failed = [r for r in results if r[0] == FAIL]
+    print("\n" + "=" * 72)
+    print(f"{len(results) - len(failed)}/{len(results)} checks passed")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,15 @@
+{
+  "name": "rubiks-cube-solver-tools",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "description": "Build-time tooling: SVG rasterisation and README screenshot capture",
+  "scripts": {
+    "assets": "node tools/rasterize.mjs assets 512",
+    "screenshots": "node tools/screenshots.mjs"
+  },
+  "devDependencies": {
+    "puppeteer": "^25.4.0",
+    "sharp": "^0.34.4"
+  }
+}

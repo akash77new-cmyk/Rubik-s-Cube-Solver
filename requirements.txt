@@ -1,3 +1,34 @@
-opencv-python==4.12.0
-numpy==2.2.6
-kociemba==1.2.1
+# ---------------------------------------------------------------------------
+# Real-Time Rubik's Cube Solver - Python dependencies
+#
+#   python -m pip install -r requirements.txt
+#
+# Tested on Python 3.10 - 3.14 (Windows / macOS / Linux).
+# ---------------------------------------------------------------------------
+
+# --- Computer vision -------------------------------------------------------
+opencv-python>=4.10,<6          # capture, colour conversion, contours, overlays
+numpy>=1.26                     # array maths behind the HSV sampling
+
+# --- Solver ----------------------------------------------------------------
+# Kociemba's own pure-Python two-phase implementation. No compiler required, so
+# it installs on every platform. It builds ~70 MB of pruning tables into
+# .cache/twophase/ on first run (one-time, a few minutes); afterwards a solve
+# takes single-digit milliseconds.
+RubikTwoPhase>=1.1.1
+
+# Optional: the native C implementation of the same algorithm. Faster to warm up
+# (no tables) but needs a C toolchain - MSVC Build Tools on Windows - so it is
+# not installed by default. The solver engine picks it up automatically if
+# present, otherwise it falls back to RubikTwoPhase.
+#   pip install kociemba
+# kociemba>=1.2.1
+
+# --- Web server / IPC ------------------------------------------------------
+Flask>=3.0                      # HTTP server + MJPEG stream
+Flask-SocketIO>=5.4             # WebSocket bridge to the React frontend
+simple-websocket>=1.0           # WebSocket transport for Flask-SocketIO
+
+# --- Development / verification only ---------------------------------------
+# Used by scripts/verify.py to drive the app the way a browser would.
+# python-socketio[client]>=5.11
