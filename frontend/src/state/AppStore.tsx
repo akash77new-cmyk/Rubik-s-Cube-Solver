@@ -1,0 +1,225 @@
+/**
+ * Real-time application state.
+ *
+ * One Socket.IO connection mirrors the engine's session snapshot into React.
+ * Every page reads from this store and every user action goes out as a single
+ * `command` event, so the engine stays the single source of truth and the UI
+ * never holds a divergent copy of the cube.
+ */
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { io, type Socket } from "socket.io-client";
+import type {
+  AnalyticsInfo,
+  CalibrationInfo,
+  CameraInfo,
+  DetectionInfo,
+  LogEntry,
+  SettingsInfo,
+  Snapshot,
+  SolutionInfo,
+  SolverInfo,
+} from "@/lib/types";
+
+const MAX_LOGS = 400;
+
+declare global {
+  interface Window {
+    /** Debug/automation handle for the live Socket.IO connection. */
+    __cubeSocket?: Socket;
+  }
+}
+
+export type ConnectionState = "connecting" | "online" | "offline";
+
+export interface Toast {
+  id: number;
+  tone: "good" | "warning" | "critical" | "brand";
+  title: string;
+  message?: string;
+}
+
+interface AppStoreValue {
+  connection: ConnectionState;
+  snapshot: Snapshot | null;
+  detection: DetectionInfo | null;
+  logs: LogEntry[];
+  toasts: Toast[];
+  /** Frames rendered per second by the MJPEG viewport (client-side measure). */
+  send: (command: string, payload?: Record<string, unknown>) => void;
+  dismissToast: (id: number) => void;
+  pushToast: (toast: Omit<Toast, "id">) => void;
+  clearLogs: () => void;
+}
+
+const AppStoreContext = createContext<AppStoreValue | null>(null);
+
+export function AppStoreProvider({ children }: { children: ReactNode }) {
+  const [connection, setConnection] = useState<ConnectionState>("connecting");
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [detection, setDetection] = useState<DetectionInfo | null>(null);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const socketRef = useRef<Socket | null>(null);
+  const toastId = useRef(1);
+
+  const pushToast = useCallback((toast: Omit<Toast, "id">) => {
+    const id = toastId.current++;
+    setToasts((current) => [...current, { ...toast, id }].slice(-4));
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((item) => item.id !== id));
+    }, 4200);
+  }, []);
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts((current) => current.filter((item) => item.id !== id));
+  }, []);
+
+  // ------------------------------------------------------------------
+  // Socket wiring
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    const socket = io({ transports: ["websocket", "polling"], reconnectionDelay: 800 });
+    socketRef.current = socket;
+    // Exposed so tooling (tools/screenshots.mjs) and manual debugging can drive
+    // the engine from the browser console without a second connection.
+    window.__cubeSocket = socket;
+
+    const patch = (key: keyof Snapshot, value: unknown) =>
+      setSnapshot((current) =>
+        current ? ({ ...current, [key]: value } as Snapshot) : current,
+      );
+
+    socket.on("connect", () => setConnection("online"));
+    socket.on("disconnect", () => setConnection("offline"));
+    socket.on("connect_error", () => setConnection("offline"));
+
+    socket.on("state", (data: Snapshot) => setSnapshot(data));
+    socket.on("detection", (data: DetectionInfo) => setDetection(data));
+    // Camera counters tick constantly; they arrive on their own slow channel so
+    // a full state broadcast is not needed for every frame.
+    socket.on("telemetry", (data: { camera: CameraInfo }) => patch("camera", data.camera));
+    socket.on("solver", (data: SolverInfo) => patch("solver", data));
+    socket.on("analytics", (data: AnalyticsInfo) => patch("analytics", data));
+    socket.on("calibration", (data: CalibrationInfo) => patch("calibration", data));
+    socket.on("playback", () => void 0); // full state follows every playback event
+
+    socket.on("logs", (data: LogEntry[]) => setLogs(Array.isArray(data) ? data : []));
+    socket.on("log", (entry: LogEntry) =>
+      setLogs((current) => [...current, entry].slice(-MAX_LOGS)),
+    );
+
+    socket.on("scan:face", (data: { face: string; confidence: number }) =>
+      pushToast({
+        tone: "good",
+        title: `Face ${data.face} captured`,
+        message: `confidence ${(data.confidence * 100).toFixed(0)}%`,
+      }),
+    );
+    socket.on("scan:complete", (data: { validation: { ok: boolean; errors: string[] } }) =>
+      pushToast(
+        data.validation.ok
+          ? { tone: "good", title: "All six faces scanned", message: "Cube state is valid" }
+          : {
+              tone: "critical",
+              title: "Scan invalid",
+              message: data.validation.errors[0] ?? "Re-scan the cube",
+            },
+      ),
+    );
+    socket.on("solve:complete", (data: SolutionInfo) =>
+      pushToast({
+        tone: "brand",
+        title: `Solved in ${data.moveCount} moves`,
+        message: `${data.elapsedMs.toFixed(1)} ms · ${data.backend}`,
+      }),
+    );
+    socket.on("solve:error", (data: { error: string }) =>
+      pushToast({ tone: "critical", title: "Solve failed", message: data.error }),
+    );
+    socket.on("solve:finished", () =>
+      pushToast({ tone: "good", title: "Cube solved", message: "Nice work" }),
+    );
+    socket.on("engine:disconnected", () =>
+      pushToast({ tone: "warning", title: "Vision engine disconnected" }),
+    );
+
+    return () => {
+      socket.removeAllListeners();
+      socket.close();
+      socketRef.current = null;
+    };
+  }, [pushToast]);
+
+  // Keep the document theme in sync with the persisted setting.
+  useEffect(() => {
+    const theme = snapshot?.settings.theme ?? "dark";
+    document.documentElement.dataset.theme = theme;
+  }, [snapshot?.settings.theme]);
+
+  const send = useCallback(
+    (command: string, payload: Record<string, unknown> = {}) => {
+      const socket = socketRef.current;
+      if (!socket?.connected) {
+        pushToast({ tone: "critical", title: "Not connected", message: "Backend is unreachable" });
+        return;
+      }
+      socket.emit(
+        "command",
+        { command, payload },
+        (ack: { ok: boolean; error?: string } | undefined) => {
+          if (ack && !ack.ok && ack.error) {
+            pushToast({ tone: "critical", title: "Command failed", message: ack.error });
+          }
+        },
+      );
+    },
+    [pushToast],
+  );
+
+  const clearLogs = useCallback(() => {
+    setLogs([]);
+    send("logs.clear");
+  }, [send]);
+
+  const value = useMemo<AppStoreValue>(
+    () => ({
+      connection,
+      snapshot,
+      detection,
+      logs,
+      toasts,
+      send,
+      pushToast,
+      dismissToast,
+      clearLogs,
+    }),
+    [connection, snapshot, detection, logs, toasts, send, pushToast, dismissToast, clearLogs],
+  );
+
+  return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>;
+}
+
+export function useApp(): AppStoreValue {
+  const context = useContext(AppStoreContext);
+  if (!context) throw new Error("useApp must be used inside <AppStoreProvider>");
+  return context;
+}
+
+/** Convenience selectors so pages do not repeat null checks everywhere. */
+export function useSnapshot(): Snapshot | null {
+  return useApp().snapshot;
+}
+
+export function useSettings(): SettingsInfo | null {
+  return useApp().snapshot?.settings ?? null;
+}

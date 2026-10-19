@@ -1,0 +1,179 @@
+/*
+ * Design tokens.
+ *
+ * Dark is the default; `:root[data-theme="light"]` overrides the surface and ink
+ * ramps only, so every component is written once against roles.
+ *
+ * The chart palette (--series-*, --status-*, --seq-*) is NOT hand-picked: the
+ * three categorical slots were validated for both modes against these exact
+ * surfaces (OKLCH lightness band, chroma floor, all-pairs CVD separation,
+ * normal-vision floor and 3:1 contrast). Do not substitute hexes without
+ * re-validating.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- Surfaces & ink -------------------------------------------------- */
+  --plane: #08080f;
+  --plane-2: #0b0b14;
+  --surface: #14141f;
+  --surface-raised: #191926;
+  --glass: rgba(255, 255, 255, 0.045);
+  --glass-strong: rgba(255, 255, 255, 0.075);
+  --hairline: rgba(255, 255, 255, 0.09);
+  --hairline-strong: rgba(255, 255, 255, 0.16);
+
+  --ink: #f4f4f8;
+  --ink-2: #b6b6cc;
+  --ink-3: #7d7d99;
+  --ink-inverse: #0b0b12;
+
+  /* ---- Brand ----------------------------------------------------------- */
+  --brand: #8b5cf6;
+  --brand-2: #22d3ee;
+  --brand-3: #f59e0b;
+  --brand-glow: rgba(139, 92, 246, 0.45);
+  --gradient-brand: linear-gradient(120deg, #22d3ee 0%, #8b5cf6 55%, #f472b6 100%);
+  --gradient-soft: linear-gradient(140deg, rgba(34, 211, 238, 0.16), rgba(139, 92, 246, 0.16));
+
+  /* ---- Chart palette (validated) --------------------------------------- */
+  --series-1: #8f6fe8;
+  --series-2: #1e96ae;
+  --series-3: #bc8a10;
+  --seq-100: #ede9fe;
+  --seq-200: #ddd6fe;
+  --seq-300: #c4b5fd;
+  --seq-400: #a78bfa;
+  --seq-500: #8b5cf6;
+  --seq-600: #7c3aed;
+  --seq-700: #6d28d9;
+  --grid: rgba(255, 255, 255, 0.07);
+  --axis: rgba(255, 255, 255, 0.16);
+
+  /* ---- Status (fixed, never themed) ------------------------------------ */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+
+  /* ---- Cube colours ---------------------------------------------------- */
+  --cube-W: #f8fafc;
+  --cube-Y: #facc15;
+  --cube-R: #ef4444;
+  --cube-O: #f97316;
+  --cube-G: #22c55e;
+  --cube-B: #3b82f6;
+
+  /* ---- Geometry -------------------------------------------------------- */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  --sidebar-w: 244px;
+  --header-h: 66px;
+
+  /* ---- Elevation ------------------------------------------------------- */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+  --shadow-3: 0 24px 64px -24px rgba(0, 0, 0, 0.75);
+  --shadow-glow: 0 0 0 1px rgba(139, 92, 246, 0.35), 0 12px 40px -12px var(--brand-glow);
+
+  /* ---- Motion ---------------------------------------------------------- */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-1: 140ms;
+  --dur-2: 220ms;
+  --dur-3: 380ms;
+
+  /* ---- Type ------------------------------------------------------------ */
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+/*
+ * Midnight: a true-black variant for OLED panels and dim rooms.
+ *
+ * Surfaces drop to near-zero so the accents are the only light in the frame,
+ * which is what lets the glow read as glow. The ink ramp is lifted slightly to
+ * hold contrast against the darker backdrop, and the chart palette is left
+ * alone - those three hues were validated against the dark surfaces and
+ * midnight only makes their contrast better, never worse.
+ */
+:root[data-theme="midnight"] {
+  color-scheme: dark;
+
+  --plane: #000000;
+  --plane-2: #04040a;
+  --surface: #0a0a12;
+  --surface-raised: #10101a;
+  --glass: rgba(255, 255, 255, 0.032);
+  --glass-strong: rgba(255, 255, 255, 0.06);
+  --hairline: rgba(255, 255, 255, 0.07);
+  --hairline-strong: rgba(255, 255, 255, 0.14);
+
+  --ink: #f7f7fb;
+  --ink-2: #c0c0d6;
+  --ink-3: #85859f;
+
+  /* Slightly hotter accents - they carry the whole frame here. */
+  --brand: #a274ff;
+  --brand-2: #3ee0f7;
+  --brand-3: #ffb020;
+  --brand-glow: rgba(162, 116, 255, 0.65);
+  --gradient-brand: linear-gradient(120deg, #3ee0f7 0%, #a274ff 55%, #ff7ac6 100%);
+  --gradient-soft: linear-gradient(140deg, rgba(62, 224, 247, 0.14), rgba(162, 116, 255, 0.16));
+
+  --grid: rgba(255, 255, 255, 0.06);
+  --axis: rgba(255, 255, 255, 0.14);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.7);
+  --shadow-2: 0 8px 28px -8px rgba(0, 0, 0, 0.9);
+  --shadow-3: 0 26px 70px -24px rgba(0, 0, 0, 0.95);
+  --shadow-glow: 0 0 0 1px rgba(162, 116, 255, 0.5), 0 16px 52px -12px var(--brand-glow);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --plane: #f4f4f8;
+  --plane-2: #ececf4;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-strong: rgba(255, 255, 255, 0.9);
+  --hairline: rgba(11, 11, 18, 0.1);
+  --hairline-strong: rgba(11, 11, 18, 0.18);
+
+  --ink: #14141f;
+  --ink-2: #4b4b60;
+  --ink-3: #74748c;
+  --ink-inverse: #ffffff;
+
+  --brand: #7c3aed;
+  --brand-2: #0891b2;
+  --brand-3: #b45309;
+  --brand-glow: rgba(124, 58, 237, 0.28);
+  --gradient-soft: linear-gradient(140deg, rgba(8, 145, 178, 0.1), rgba(124, 58, 237, 0.12));
+
+  --series-1: #7c3aed;
+  --series-2: #0891b2;
+  --series-3: #b45309;
+  --grid: rgba(11, 11, 18, 0.08);
+  --axis: rgba(11, 11, 18, 0.2);
+
+  --shadow-1: 0 1px 2px rgba(11, 11, 18, 0.06);
+  --shadow-2: 0 8px 24px -10px rgba(11, 11, 18, 0.18);
+  --shadow-3: 0 24px 60px -26px rgba(11, 11, 18, 0.28);
+  --shadow-glow: 0 0 0 1px rgba(124, 58, 237, 0.25), 0 12px 36px -14px var(--brand-glow);
+}

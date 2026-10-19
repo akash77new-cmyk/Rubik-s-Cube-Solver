@@ -1,0 +1,7 @@
+# Dependencies now live in the project root so the CLI tools and the web app
+# share one manifest:
+#
+#     python -m pip install -r ../requirements.txt
+#
+# (Run from the project root: python -m pip install -r requirements.txt)
+-r ../requirements.txt

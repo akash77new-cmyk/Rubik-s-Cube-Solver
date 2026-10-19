@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="red sticker">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0%" stop-color="#FCA5A5"/>
+      <stop offset="55%" stop-color="#EF4444"/>
+      <stop offset="100%" stop-color="#B91C1C"/>
+    </linearGradient>
+    <filter id="s" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="24" fill="#B91C1C" opacity="0.5"/>
+  <rect x="10" y="8" width="108" height="108" rx="22" fill="url(#g)" filter="url(#s)"/>
+  <path d="M22 30 Q34 16 60 16 L96 16 Q78 26 62 40 Q40 44 22 52 Z" fill="#fff" opacity="0.20"/>
+</svg>
