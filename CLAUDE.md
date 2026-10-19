@@ -118,7 +118,7 @@ vision engine (process 1)  backend/engine.py         single source of truth
 ## 8. Roadmap
 | Phase | Goal | Status |
 |---|---|---|
-| 0 | Foundation + first deploy | ⬜ |
+| 0 | Foundation + first deploy | ✅ |
 | 1 | Full cube validation: cubie model, twist / flip / parity, structured errors | ⬜ |
 | 2 | Per-sticker detection data + dataset collection | ⬜ |
 | 3 | Database: Neon Postgres, SQLAlchemy, Alembic, pgvector | ⬜ |

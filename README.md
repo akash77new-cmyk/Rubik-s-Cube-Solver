@@ -41,6 +41,9 @@ rotation arrows drawn over the live feed, and an analytics dashboard tracking ev
 ## Quick start
 
 ```bash
+# 0. Local settings (optional for local development - the defaults just work)
+cp .env.example .env
+
 # 1. Python dependencies
 python -m pip install -r requirements.txt
 
@@ -238,6 +241,22 @@ python "python code files/hsv_calibrator.py"   # trackbar calibration, saves rea
 
 ---
 
+## Development
+
+```bash
+python -m pip install -r requirements-dev.txt   # app + pytest + Socket.IO client
+
+pytest                          # unit tests (about a second)
+pytest -m "not slow"            # skip the solver tests
+python tools/verify.py          # end-to-end pipeline check (9 offline checks)
+python tools/verify.py --live   # + 6 checks against a running app (python run.py --headless)
+```
+
+The unit tests live in `tests/`. They never touch your real `data/` folder:
+`tests/conftest.py` points `CUBE_DATA_DIR` at a throwaway temp folder.
+
+---
+
 ## Verifying it works
 
 ```bash
@@ -299,7 +318,60 @@ Analytics page. This is why the project has no hard dependency on a compiler.
 | `data/solve_history.json` | persisted solve records |
 | `.cache/twophase/` | generated pruning tables (safe to delete; rebuilt on demand) |
 
-Ports are overridable with `CUBE_WEB_PORT`, `CUBE_ENGINE_PORT`, `CUBE_ENGINE_HOST`.
+Ports, hosts, the secret key and the data folder come from environment variables - see
+[Environment variables](#environment-variables).
+
+---
+
+## Deployment
+
+In production the app runs as one container with two processes: the vision engine and the web
+server (gunicorn).
+
+### Production mode (Linux / macOS / WSL)
+
+```bash
+python -m pip install -r requirements-prod.txt   # adds the C solver (needs gcc) + gunicorn
+APP_ENV=production FLASK_SECRET_KEY=change-me python run.py --prod
+```
+
+`run.py --prod` starts the engine and gunicorn (one worker with threads, see `gunicorn.conf.py`)
+and supervises both: if either one exits, the other is stopped and the process exits non-zero so
+the platform restarts it. gunicorn does not run on Windows - use Docker or WSL there.
+
+### Docker
+
+```bash
+docker build -t cube-solver .
+docker run --rm -p 8000:8000 -e PORT=8000 -e FLASK_SECRET_KEY=dev cube-solver
+```
+
+Then open <http://127.0.0.1:8000>. The multi-stage build compiles the C solver in a build stage,
+so the final image contains only what runs.
+
+### Render
+
+`render.yaml` is a Render Blueprint: one free Docker web service with a health check on
+`/api/health`. In Render choose **New → Blueprint**, pick this repository and click **Apply**.
+Render generates `FLASK_SECRET_KEY` and sets `PORT`.
+
+The live demo has no webcam (use **Demo scramble**), sleeps after 15 minutes without traffic, and
+its disk is temporary, so solve history resets on every deploy.
+
+### Environment variables
+
+Locally they can live in a `.env` file (copy `.env.example`); real environment variables always
+win over it.
+
+| Variable | Development default | Production |
+|---|---|---|
+| `APP_ENV` | `development` | `production` (set in the Dockerfile) |
+| `FLASK_SECRET_KEY` | insecure dev key | required (Render generates it) |
+| `CUBE_WEB_HOST` | `127.0.0.1` | `0.0.0.0` |
+| `CUBE_WEB_PORT` | `$PORT`, else `8000` | Render sets `PORT` |
+| `CUBE_ENGINE_HOST` / `CUBE_ENGINE_PORT` | `127.0.0.1` / `9999` | same |
+| `CUBE_ALLOWED_ORIGINS` | `*` | `*` (tightened in Phase 12) |
+| `CUBE_DATA_DIR` | `./data` | `./data` |
 
 ---
 
