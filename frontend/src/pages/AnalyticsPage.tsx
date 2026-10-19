@@ -83,8 +83,8 @@ export default function AnalyticsPage({ navigate }: { navigate: (page: PageId) =
           hint={solver?.ready ? "ready" : solver?.state ?? "initialising"}
         />
         <StatTile
-          label="Detection accuracy"
-          value={(analytics?.detectionAccuracy ?? 0) * 100}
+          label="Avg. confidence"
+          value={(analytics?.averageConfidence ?? 0) * 100}
           unit="%"
           digits={1}
           icon={<IconTarget size={13} />}

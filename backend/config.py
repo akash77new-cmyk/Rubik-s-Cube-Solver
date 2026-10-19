@@ -1,4 +1,4 @@
-"""Application paths and persisted user settings.
+"""Application paths, environment configuration and persisted user settings.
 
 Settings live in ``<project>/data/settings.json`` so that a fresh checkout works
 with sane defaults and never requires editing source to change a camera index.
@@ -11,16 +11,23 @@ import os
 import threading
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Mapping, Union
+
+from dotenv import load_dotenv
 
 # --------------------------------------------------------------------------------------
 # Paths
 # --------------------------------------------------------------------------------------
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Local development reads settings from a git-ignored .env file.
+# Real environment variables (Render, Docker, CI) always win over it.
+load_dotenv(PROJECT_ROOT / ".env", override=False)
+
 ASSETS_DIR = PROJECT_ROOT / "assets"
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
-DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR = Path(os.environ.get("CUBE_DATA_DIR") or PROJECT_ROOT / "data")
 CACHE_DIR = PROJECT_ROOT / ".cache"
 SOLVER_TABLE_DIR = CACHE_DIR / "twophase"
 DOCS_DIR = PROJECT_ROOT / "docs"
@@ -34,16 +41,69 @@ for _directory in (DATA_DIR, CACHE_DIR, SOLVER_TABLE_DIR):
 
 
 # --------------------------------------------------------------------------------------
-# Network
+# Runtime configuration (environment variables)
 # --------------------------------------------------------------------------------------
 
-#: TCP port used by the vision engine process. The web server connects to it as a client.
-ENGINE_HOST = os.environ.get("CUBE_ENGINE_HOST", "127.0.0.1")
-ENGINE_PORT = int(os.environ.get("CUBE_ENGINE_PORT", "9999"))
 
-#: HTTP port for the Flask + Socket.IO server that serves the UI.
-WEB_HOST = os.environ.get("CUBE_WEB_HOST", "127.0.0.1")
-WEB_PORT = int(os.environ.get("CUBE_WEB_PORT", "8000"))
+class ConfigError(RuntimeError):
+    """Raised at startup when the environment is misconfigured."""
+
+
+@dataclass(frozen=True)
+class RuntimeConfig:
+    """Everything this process reads from environment variables, in one place."""
+
+    app_env: str                              # "development" | "production"
+    web_host: str
+    web_port: int
+    engine_host: str
+    engine_port: int
+    secret_key: str
+    allowed_origins: Union[str, List[str]]    # "*" or a list of origins
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env == "production"
+
+
+def read_runtime_config(env: Mapping[str, str]) -> RuntimeConfig:
+    """Build the config from ``env`` (a plain mapping, so tests can pass a dict)."""
+    app_env = (env.get("APP_ENV") or "development").strip().lower()
+    if app_env not in ("development", "production"):
+        raise ConfigError(f"APP_ENV must be 'development' or 'production', got {app_env!r}")
+    production = app_env == "production"
+
+    secret = env.get("FLASK_SECRET_KEY") or ""
+    if not secret:
+        if production:
+            raise ConfigError("FLASK_SECRET_KEY must be set when APP_ENV=production")
+        secret = "dev-only-insecure-key"
+
+    raw_origins = (env.get("CUBE_ALLOWED_ORIGINS") or "*").strip()
+    origins: Union[str, List[str]] = (
+        "*" if raw_origins == "*"
+        else [o.strip() for o in raw_origins.split(",") if o.strip()]
+    )
+
+    return RuntimeConfig(
+        app_env=app_env,
+        web_host=env.get("CUBE_WEB_HOST") or ("0.0.0.0" if production else "127.0.0.1"),
+        # Render injects PORT; an explicit CUBE_WEB_PORT still wins.
+        web_port=int(env.get("CUBE_WEB_PORT") or env.get("PORT") or 8000),
+        engine_host=env.get("CUBE_ENGINE_HOST") or "127.0.0.1",
+        engine_port=int(env.get("CUBE_ENGINE_PORT") or 9999),
+        secret_key=secret,
+        allowed_origins=origins,
+    )
+
+
+RUNTIME = read_runtime_config(os.environ)
+
+# Kept so existing imports keep working.
+ENGINE_HOST = RUNTIME.engine_host
+ENGINE_PORT = RUNTIME.engine_port
+WEB_HOST = RUNTIME.web_host
+WEB_PORT = RUNTIME.web_port
 
 
 # --------------------------------------------------------------------------------------

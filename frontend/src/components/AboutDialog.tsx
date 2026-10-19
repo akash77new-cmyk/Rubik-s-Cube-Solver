@@ -33,7 +33,7 @@ const CAPABILITIES: { title: string; detail: string }[] = [
   {
     title: "Analytics",
     detail:
-      "Persisted solve history with move counts, solve times, move distribution and running detection accuracy.",
+      "Persisted solve history with move counts, solve times, move distribution and running average sticker confidence.",
   },
 ];
 

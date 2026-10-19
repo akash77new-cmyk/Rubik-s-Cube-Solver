@@ -1,0 +1,16 @@
+# Render Blueprint: the live demo, defined as code.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: rubiks-cube-solver
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: FLASK_SECRET_KEY
+        generateValue: true

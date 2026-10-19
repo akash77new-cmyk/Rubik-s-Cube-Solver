@@ -34,7 +34,7 @@ rotation arrows drawn over the live feed, and an analytics dashboard tracking ev
 | **Kociemba two-phase solver** | Pluggable backend: the native C extension when installed, otherwise Kociemba's own pure-Python implementation. Solutions are ≤ 20 moves, found in single-digit milliseconds. |
 | **Socket-based IPC** | The vision engine runs as its **own OS process** and publishes state and JPEG frames over a length-prefixed TCP protocol. The web server is a pure relay. |
 | **Real-time synchronisation** | One Socket.IO connection mirrors the engine snapshot into React. Every page reads the same state; every action is a single command going the other way. |
-| **Analytics** | Persisted solve history: move counts, search times, execution times, move distribution and running detection accuracy. |
+| **Analytics** | Persisted solve history: move counts, search times, execution times, move distribution and running average sticker confidence. |
 
 ---
 
@@ -112,7 +112,7 @@ restart · speed, and the 3D cube **animating the actual layer turn** after ever
 
 ### 6 · Analytics
 Solution time, move count, average solve time, total cubes solved, current solver backend and
-detection accuracy. Plus the solve timeline, move distribution per face, turn-type split and a
+average sticker confidence. Plus the solve timeline, move distribution per face, turn-type split and a
 full history table.
 
 ![Analytics](docs/screenshots/06-analytics.png)

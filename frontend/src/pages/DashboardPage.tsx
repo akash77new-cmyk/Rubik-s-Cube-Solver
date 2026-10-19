@@ -16,7 +16,7 @@ import {
   IconTarget,
 } from "@/components/Icons";
 import { useApp } from "@/state/AppStore";
-import { formatDuration, formatMs, percent } from "@/lib/format";
+import { formatDuration, formatMs } from "@/lib/format";
 import { THEMES } from "@/lib/types";
 
 export default function DashboardPage({ navigate }: { navigate: (page: PageId) => void }) {
@@ -223,8 +223,8 @@ export default function DashboardPage({ navigate }: { navigate: (page: PageId) =
           tint="rgba(34,211,238,0.18)"
         />
         <StatTile
-          label="Detection accuracy"
-          value={(analytics?.detectionAccuracy ?? 0) * 100}
+          label="Avg. confidence"
+          value={(analytics?.averageConfidence ?? 0) * 100}
           unit="%"
           digits={1}
           icon={<IconTarget size={13} />}
@@ -322,8 +322,8 @@ export default function DashboardPage({ navigate }: { navigate: (page: PageId) =
           ))}
         </div>
         <p style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
-          Detection accuracy is the running mean sticker confidence over{" "}
-          {percent(analytics?.detectionAccuracy ?? 0, 1)} of sampled frames this session.
+          Average confidence is the mean per-sticker confidence over the frames sampled this
+          session. It shows how sure the detector is, not how often it is right.
         </p>
       </Card>
     </>

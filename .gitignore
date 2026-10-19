@@ -4,6 +4,13 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.pytest_cache/
+
+# Local environment settings and secrets (template: .env.example)
+.env
+
+# Private phase specs - kept local, never committed
+docs/phases/
 
 # Generated solver pruning tables (~70 MB, rebuilt on demand)
 .cache/

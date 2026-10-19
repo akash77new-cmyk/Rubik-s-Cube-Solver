@@ -1,0 +1,4 @@
+# Development tools:  python -m pip install -r requirements-dev.txt
+-r requirements.txt
+pytest>=8.0
+python-socketio[client]>=5.11   # used by tools/verify.py --live

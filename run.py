@@ -5,12 +5,15 @@
     python run.py --dev        # expects `npm run dev` for hot-reloading the UI
     python run.py --no-engine  # attach to an engine already running elsewhere
     python run.py --headless   # do not open a browser
+    python run.py --prod       # production: engine + gunicorn (Linux/Docker)
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import logging
+import signal
 import subprocess
 import sys
 import threading
@@ -48,6 +51,59 @@ def _open_browser(url: str, delay: float = 1.5) -> None:
     threading.Thread(target=_later, daemon=True).start()
 
 
+def run_production() -> int:
+    """Production (Linux/Docker): vision engine + gunicorn, supervised.
+
+    Both run in one container. If either process dies, the other is stopped too
+    and we exit non-zero, so the platform restarts the whole container.
+    """
+    if sys.platform == "win32":
+        print("--prod needs Linux (gunicorn does not run on Windows). Use Docker or WSL.")
+        return 2
+    if importlib.util.find_spec("gunicorn") is None:
+        print("gunicorn is missing: python -m pip install -r requirements-prod.txt")
+        return 2
+    if not (FRONTEND_DIST / "index.html").exists():
+        print("  frontend       -> NOT BUILT. Run: cd frontend && npm ci && npm run build")
+
+    children = {
+        "engine": _spawn_engine(ENGINE_HOST, ENGINE_PORT),
+        "web": subprocess.Popen(
+            [sys.executable, "-m", "gunicorn", "--config", "gunicorn.conf.py",
+             "backend.server.wsgi:app"],
+            cwd=str(PROJECT_ROOT),
+        ),
+    }
+    stopping = False
+
+    def _stop_all(*_signal_args: object) -> None:
+        nonlocal stopping
+        stopping = True
+        for proc in children.values():
+            if proc.poll() is None:
+                proc.terminate()
+
+    signal.signal(signal.SIGTERM, _stop_all)
+    signal.signal(signal.SIGINT, _stop_all)
+
+    while all(proc.poll() is None for proc in children.values()):
+        time.sleep(0.5)
+
+    exit_code = 0
+    if not stopping:
+        name, proc = next((n, p) for n, p in children.items() if p.poll() is not None)
+        print(f"{name} process exited (code {proc.returncode}); stopping the other one")
+        exit_code = proc.returncode or 1
+        _stop_all()
+
+    for proc in children.values():
+        try:
+            proc.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+    return exit_code
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the Rubik's Cube Solver app")
     parser.add_argument("--host", default=WEB_HOST)
@@ -58,7 +114,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--headless", action="store_true", help="do not open a browser")
     parser.add_argument("--dev", action="store_true", help="frontend runs under Vite")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--prod", action="store_true", help="production mode (Linux/Docker)")
     args = parser.parse_args(argv)
+    if args.prod:
+        return run_production()
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,

@@ -29,6 +29,5 @@ Flask>=3.0                      # HTTP server + MJPEG stream
 Flask-SocketIO>=5.4             # WebSocket bridge to the React frontend
 simple-websocket>=1.0           # WebSocket transport for Flask-SocketIO
 
-# --- Development / verification only ---------------------------------------
-# Used by scripts/verify.py to drive the app the way a browser would.
-# python-socketio[client]>=5.11
+# --- Configuration ---------------------------------------------------------
+python-dotenv>=1.0              # loads a local .env file into environment variables

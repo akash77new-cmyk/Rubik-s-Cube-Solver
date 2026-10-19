@@ -223,7 +223,7 @@ export interface AnalyticsInfo {
   averageExecutionSeconds: number;
   bestMoveCount: number;
   totalMoves: number;
-  detectionAccuracy: number;
+  averageConfidence: number;
   faceDistribution: Record<FaceKey, number>;
   turnDistribution: Record<Direction, number>;
   recent: SolveRecord[];

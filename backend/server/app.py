@@ -27,6 +27,7 @@ from backend.config import (
     ENGINE_HOST,
     ENGINE_PORT,
     FRONTEND_DIST,
+    RUNTIME,
     WEB_HOST,
     WEB_PORT,
 )
@@ -66,10 +67,10 @@ def create_app(
 ) -> tuple[Flask, SocketIO, EngineClient]:
     """Build the Flask app, Socket.IO server and engine client."""
     app = Flask(__name__, static_folder=None)
-    app.config["SECRET_KEY"] = "rubiks-cube-solver"
+    app.config["SECRET_KEY"] = RUNTIME.secret_key
     socketio = SocketIO(
         app,
-        cors_allowed_origins="*",
+        cors_allowed_origins=RUNTIME.allowed_origins,
         async_mode="threading",
         logger=False,
         engineio_logger=False,

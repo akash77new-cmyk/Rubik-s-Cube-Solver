@@ -78,7 +78,7 @@ class AnalyticsStore:
             return record
 
     def note_detection_confidence(self, confidence: float) -> None:
-        """Feed the running detection-accuracy metric."""
+        """Feed the running average-confidence metric."""
         with self._lock:
             self._detection_samples.append(confidence)
             if len(self._detection_samples) > 2000:
@@ -90,7 +90,7 @@ class AnalyticsStore:
 
     # ------------------------------------------------------------------
     @property
-    def detection_accuracy(self) -> float:
+    def average_confidence(self) -> float:
         with self._lock:
             if not self._detection_samples:
                 return 0.0
@@ -131,7 +131,7 @@ class AnalyticsStore:
             "averageExecutionSeconds": _avg(exec_times),
             "bestMoveCount": best.move_count if best else 0,
             "totalMoves": sum(move_counts),
-            "detectionAccuracy": self.detection_accuracy,
+            "averageConfidence": self.average_confidence,
             "faceDistribution": face_totals,
             "turnDistribution": turn_totals,
             "recent": [r.to_dict() for r in records[-12:]][::-1],

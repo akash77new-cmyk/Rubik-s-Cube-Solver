@@ -621,7 +621,7 @@ class SolveSession:
             notation=solution.notation,
             face_distribution=solution.to_dict()["faceDistribution"],  # type: ignore[index]
             turn_distribution=solution.to_dict()["turnDistribution"],  # type: ignore[index]
-            detection_confidence=self._analytics.detection_accuracy,
+            detection_confidence=self._analytics.average_confidence,
             source=self._cube_source,
         )
         self._solve_id = None
