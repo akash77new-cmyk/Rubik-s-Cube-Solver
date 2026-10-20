@@ -12,6 +12,10 @@ S/V 0-255). Classification is a two-stage process:
 
 Returning a confidence rather than a bare label is what lets the scanner refuse
 low-quality reads instead of silently producing an unsolvable cube.
+
+:meth:`ColorProfile.rank` scores *every* colour, best first. The detector keeps the
+top three, so later code (the Phase 5 repair agent) knows the runner-up colours of
+a doubtful sticker - e.g. "red 0.62, orange 0.58" - not just the winner.
 """
 
 from __future__ import annotations
@@ -29,6 +33,35 @@ from backend.core.cube import COLOR_CODES, COLOR_NAMES
 HUE_MAX = 179
 SAT_MAX = 255
 VAL_MAX = 255
+
+#: Why a sticker reading is uncertain (``None`` means it is not).
+UNCERTAIN_NO_RANGE = "no_range"      # inside no colour's box: the colour is only the nearest guess
+UNCERTAIN_TWO_RANGES = "two_ranges"  # inside two colours' boxes: both colours fit
+
+
+@dataclass(frozen=True)
+class ColorScore:
+    """How well one HSV sample fits one colour.
+
+    ``confidence`` uses the same scale as :meth:`ColorProfile.classify`:
+    0.55-1.0 when the sample is inside the colour's box, 0.05-0.5 when outside.
+    """
+
+    code: str
+    confidence: float
+    in_range: bool
+
+    def to_dict(self) -> Dict[str, object]:
+        return {"color": self.code, "confidence": self.confidence, "inRange": self.in_range}
+
+
+def uncertainty(ranking: Sequence[ColorScore]) -> Optional[str]:
+    """``UNCERTAIN_NO_RANGE``, ``UNCERTAIN_TWO_RANGES`` or ``None`` for a ranked reading."""
+    if not ranking or not ranking[0].in_range:
+        return UNCERTAIN_NO_RANGE
+    if len(ranking) > 1 and ranking[1].in_range:
+        return UNCERTAIN_TWO_RANGES
+    return None
 
 
 @dataclass
@@ -215,27 +248,34 @@ class ColorProfile:
         )
 
     # ------------------------------------------------------------------
-    def classify(self, h: float, s: float, v: float) -> Tuple[str, float]:
-        """Return ``(colour_code, confidence)`` for one HSV sample."""
-        best_code: Optional[str] = None
-        best_score = -1.0
+    def rank(self, h: float, s: float, v: float) -> List[ColorScore]:
+        """Every colour for one HSV sample, best match first.
+
+        Colours whose box contains the sample come first, most centred first.
+        The rest follow, nearest box first. ``sorted`` is stable, so on a tie the
+        colour listed first in the profile wins - exactly like the original
+        first-match loop. :meth:`classify` is simply ``rank(...)[0]``.
+        """
+        inside: List[Tuple[float, ColorScore]] = []
+        outside: List[Tuple[float, ColorScore]] = []
         for code, rng in self.ranges.items():
             if rng.contains(h, s, v):
                 score = rng.score(h, s, v)
-                if score > best_score:
-                    best_score, best_code = score, code
+                # Map an in-box score onto a confident 0.55-1.0 band.
+                inside.append((score, ColorScore(code, round(0.55 + 0.45 * score, 3), True)))
+            else:
+                distance = rng.distance(h, s, v)
+                # Outside the box: a deliberately low 0.05-0.5 band, so the UI can flag it.
+                confidence = max(0.05, min(0.5, 0.5 * math.exp(-1.8 * distance)))
+                outside.append((distance, ColorScore(code, round(confidence, 3), False)))
+        inside.sort(key=lambda item: -item[0])
+        outside.sort(key=lambda item: item[0])
+        return [score for _, score in inside] + [score for _, score in outside]
 
-        if best_code is not None:
-            # Map an in-box score onto a confident 0.55-1.0 band.
-            return best_code, round(0.55 + 0.45 * best_score, 3)
-
-        # Nothing matched - fall back to the nearest box, flagged as low trust.
-        nearest_code = min(
-            self.ranges, key=lambda code: self.ranges[code].distance(h, s, v)
-        )
-        distance = self.ranges[nearest_code].distance(h, s, v)
-        confidence = max(0.05, min(0.5, 0.5 * math.exp(-1.8 * distance)))
-        return nearest_code, round(confidence, 3)
+    def classify(self, h: float, s: float, v: float) -> Tuple[str, float]:
+        """Return ``(colour_code, confidence)`` for one HSV sample."""
+        best = self.rank(h, s, v)[0]
+        return best.code, best.confidence
 
     def calibrate_from_samples(
         self, code: str, samples: Sequence[Tuple[float, float, float]], padding: int = 12
