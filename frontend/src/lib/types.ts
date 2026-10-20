@@ -145,6 +145,8 @@ export interface PlaybackInfo {
   total: number;
   playing: boolean;
   completed: boolean;
+  /** False until the user confirms they hold the cube the right way (before move 1). */
+  ready: boolean;
   progress: number;
   current: MoveInfo | null;
   previous: MoveInfo | null;

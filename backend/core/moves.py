@@ -35,10 +35,12 @@ FACE_AXIS: Dict[str, str] = {
 }
 
 #: Which way each turn moves, for a person holding the cube with the front (F) facing
-#: them and the top (U) on top - the orientation the solver's moves assume. For the four
-#: side layers it is the way the layer's front stickers travel; F is turned while
-#: looking at it, and so is B, after turning the whole cube around. Half turns use the
-#: clockwise entry. tests/test_moves.py checks every entry against the cube model.
+#: them and the top (U) on top - the orientation the solver's moves assume. Everything
+#: is seen from where that person is, and the cube is never turned around. For the four
+#: side layers it is the way the layer's front stickers travel; for F and B it is the
+#: way the layer spins as seen from the front. B "clockwise" is named as seen from
+#: behind, so from the front it spins counter-clockwise. Half turns use the clockwise
+#: entry. tests/test_moves.py checks every entry against the cube model.
 TURN_ARROWS: Dict[str, Tuple[str, str]] = {
     # face: (clockwise, counter-clockwise)
     "U": ("left", "right"),
@@ -46,12 +48,12 @@ TURN_ARROWS: Dict[str, Tuple[str, str]] = {
     "R": ("up", "down"),
     "L": ("down", "up"),
     "F": ("clockwise", "counter-clockwise"),
-    "B": ("clockwise", "counter-clockwise"),
+    "B": ("counter-clockwise", "clockwise"),
 }
 
 #: The same turns in plain English. "Clockwise" alone is hard to follow for a side you
 #: are not looking at, so each instruction says which way the layer moves.
-_BACK = "Turn the whole cube around, keeping the top on top, so the back faces you. "
+_BACK = "Turn the back layer, the side facing away from you"
 INSTRUCTIONS: Dict[str, str] = {
     "U": "Turn the top layer to the left.",
     "U'": "Turn the top layer to the right.",
@@ -68,9 +70,9 @@ INSTRUCTIONS: Dict[str, str] = {
     "F": "Turn the front face clockwise: its top moves to the right.",
     "F'": "Turn the front face counter-clockwise: its top moves to the left.",
     "F2": "Turn the front face twice (a half turn, either way).",
-    "B": _BACK + "Turn that face clockwise, then turn the cube back.",
-    "B'": _BACK + "Turn that face counter-clockwise, then turn the cube back.",
-    "B2": _BACK + "Turn that face twice, then turn the cube back.",
+    "B": _BACK + ": its top moves to the left.",
+    "B'": _BACK + ": its top moves to the right.",
+    "B2": _BACK + ", twice (a half turn, either way).",
 }
 
 _MOVE_RE = re.compile(r"^([URFDLB])(['2]?)$")
@@ -114,6 +116,8 @@ class Move:
         suffix = {"": "clockwise", "'": "counter-clockwise", "2": "180°"}[
             self.modifier
         ]
+        if self.face == "B" and self.modifier != "2":
+            suffix += " (seen from behind)"  # from the front it spins the other way
         return f"{self.face_name} {suffix}"
 
     @property

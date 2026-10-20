@@ -71,6 +71,14 @@ def test_straight_arrows_point_the_way_the_layer_moves(notation, direction):
     assert {"left": dx < 0, "right": dx > 0, "up": dy < 0, "down": dy > 0}[direction]
 
 
+def test_hold_prompt_renders(overlay_setup):
+    frame, _, overlay = overlay_setup
+    drawn = overlay.draw_hold_prompt(frame.copy(), front="G", top="W")
+    assert not np.array_equal(drawn, frame), "no hold prompt was drawn"
+    # The picture's centre sticker is painted in the front colour (green).
+    assert tuple(drawn[HEIGHT // 2 + 30, WIDTH // 2]) == COLOR_BGR["G"]
+
+
 def test_turn_back_hint_renders(overlay_setup):
     frame, _, overlay = overlay_setup
     drawn = overlay.draw_move(frame.copy(), Move("B"), turn_back=True)

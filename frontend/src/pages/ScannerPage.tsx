@@ -36,6 +36,25 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
   const holdStep = steps.find((step) => step.face === detection?.holdFace) ?? null;
   const holdSeconds = ((settings?.auto_capture_hold_ms ?? 1000) / 1000).toFixed(1);
 
+  // Manual capture (the default): the button names the side it will store, and only
+  // turns on for a steady, confident read of a side that still needs scanning.
+  const seenStep = steps.find((step) => step.center === detection?.colors?.[4]) ?? null;
+  const outerConfident = (detection?.readings ?? [])
+    .filter((reading) => reading.index !== 4) // the centre often carries a logo
+    .every((reading) => reading.confidence >= (settings?.min_confidence ?? 0.35));
+  function manualCapture(): { ok: boolean; label: string } {
+    if (!snapshot?.camera.running) return { ok: false, label: "Starting the camera…" };
+    if (!detection?.stable || !outerConfident) {
+      return { ok: false, label: "Hold the side still in the frame…" };
+    }
+    if (seenStep?.done) {
+      return { ok: false, label: `${COLOR_NAMES[seenStep.center]} is already captured: show the next side` };
+    }
+    const side = seenStep ?? nextStep;
+    return { ok: true, label: side ? `Capture the ${COLOR_NAMES[side.center]} side` : "Capture this side" };
+  }
+  const capture = manualCapture();
+
   const counts = COLOR_CODES.reduce(
     (accumulator, code) => {
       accumulator[code] = 0;
@@ -127,7 +146,7 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
                   )}
                   {scan?.autoCapture
                     ? hold > 0 && <Tag tone="good">Hold still · {Math.round(hold * 100)}%</Tag>
-                    : detection?.stable && <Tag tone="good">ready to capture</Tag>}
+                    : snapshot?.mode === "scan" && capture.ok && <Tag tone="good">ready to capture</Tag>}
                 </div>
               </>
             }
@@ -152,6 +171,13 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
                     </>
                   }
                 />
+              )}
+              {snapshot?.mode === "scan" && !scan?.autoCapture && (
+                <div className="scan-capture">
+                  <Button variant="primary" disabled={!capture.ok} onClick={() => send("scan.capture")}>
+                    {capture.label}
+                  </Button>
+                </div>
               )}
             </Card>
           )}

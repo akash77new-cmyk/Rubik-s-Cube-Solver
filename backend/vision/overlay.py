@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import cv2
 import numpy as np
 
+from backend.core.cube import COLOR_NAMES
 from backend.core.moves import FACE_NAMES, Move
 from backend.vision.detector import DetectionResult
 
@@ -323,6 +324,36 @@ class OverlayRenderer:
             draw_text(frame, "BACK", (ax - tw // 2, ay + th // 2), 0.9, WARN, 2)
         return frame
 
+    def draw_hold_prompt(self, frame: np.ndarray, front: str, top: str) -> np.ndarray:
+        """Shown before the first move: how to hold the cube for every instruction.
+        ``front`` and ``top`` are the colour codes of the F and U centres."""
+        height, width = frame.shape[:2]
+        front_name, top_name = COLOR_NAMES[front].upper(), COLOR_NAMES[top].upper()
+        draw_glass_panel(frame, (16, 14, width - 32, 80), alpha=0.7, radius=16, border=(70, 60, 55))
+        draw_text(frame, f"Hold the cube with {front_name} facing you, {top_name} on top", (32, 50), 0.7, INK, 2)
+        draw_text(frame, "Keep it this way for every move. Then press Next.", (32, 78), 0.55, ACCENT, 1)
+
+        # The same picture as on the Solution page: the top colour above a face whose
+        # centre is the front colour.
+        cell, gap = 48, 8
+        size = 3 * cell + 2 * gap
+        x0, y0 = (width - size) // 2, height // 2 - size // 2 + 30
+        draw_glass_panel(frame, (x0 - 10, y0 - 10, size + 20, size + 20), alpha=0.85, radius=16)
+        for index in range(9):
+            row, col = divmod(index, 3)
+            x, y = x0 + col * (cell + gap), y0 + row * (cell + gap)
+            color = COLOR_BGR[front] if index == 4 else (70, 64, 60)
+            cv2.fillPoly(frame, [_rounded_rect_pts(x, y, cell, cell, 10)], color, lineType=cv2.LINE_AA)
+        label = f"{top_name} ON TOP"
+        tw, th = text_size(label, 0.6, 2)
+        bar = (x0 - 10, y0 - 54, size + 20, 34)
+        cv2.fillPoly(frame, [_rounded_rect_pts(*bar, 10)], COLOR_BGR[top], lineType=cv2.LINE_AA)
+        draw_text(frame, label, (x0 + (size - tw) // 2, y0 - 37 + th // 2), 0.6, (20, 20, 20), 2, shadow=False)
+        caption = f"{front_name} FACING YOU"
+        tw, _ = text_size(caption, 0.6, 2)
+        draw_text(frame, caption, (x0 + (size - tw) // 2, y0 + size + 44), 0.6, INK, 2)
+        return frame
+
     def _face_anchor(self, move: Move, width: int, height: int) -> Tuple[int, int, int]:
         """Where the arrow sits, and how big, for each face."""
         cx, cy = width // 2, height // 2 + 20
@@ -344,7 +375,8 @@ class OverlayRenderer:
         ax, ay, span = self._face_anchor(move, width, height)
 
         if move.face in ("F", "B"):
-            self._draw_circular_arrow(frame, (ax, ay), span, move.direction)
+            # Spins the way the person holding the cube sees it (Move.arrow).
+            self._draw_circular_arrow(frame, (ax, ay), span, move.arrow == "clockwise")
         else:
             start, end = self.linear_arrow_ends(move, (ax, ay), span)
             self._glow_line(frame, start, end, ACCENT)
@@ -400,10 +432,9 @@ class OverlayRenderer:
         cv2.fillPoly(frame, [np.array([end, p1, p2], dtype=np.int32)], color, cv2.LINE_AA)
 
     def _draw_circular_arrow(
-        self, frame: np.ndarray, center: Tuple[int, int], radius: int, direction: str
+        self, frame: np.ndarray, center: Tuple[int, int], radius: int, clockwise: bool
     ) -> None:
         cx, cy = center
-        clockwise = direction != "ccw"
         start_angle, end_angle = (-40, 250) if clockwise else (220, -70)
 
         points: List[Tuple[int, int]] = []

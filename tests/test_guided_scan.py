@@ -43,6 +43,7 @@ def session(tmp_path):
     # Capture as soon as a read is stable: these tests are about faces and orientation.
     # The hold timer has its own tests (test_auto_capture_hold.py).
     s.update_settings({"auto_capture_hold_ms": 0})
+    s.handle_command("scan.auto", {"enabled": True})  # manual capture is the app's default
     s.start_scan(open_camera=False)  # scan mode without opening a real camera
     return s
 

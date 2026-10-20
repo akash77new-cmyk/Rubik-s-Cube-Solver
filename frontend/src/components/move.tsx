@@ -31,7 +31,9 @@ export function MoveGlyph({
 }) {
   const uid = `${move.notation.replace(/'/g, "p")}${idSuffix ?? ""}`;
   const highlight = new Set(LAYER_CELLS[move.face]);
-  const clockwise = move.modifier !== "'";
+  // F and B spin the way the person holding the cube sees them (move.arrow): B
+  // "clockwise" is named as seen from behind, so from the front it spins the other way.
+  const clockwise = move.arrow === "clockwise";
   const isDouble = move.modifier === "2";
 
   return (

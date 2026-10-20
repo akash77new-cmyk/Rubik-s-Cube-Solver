@@ -257,6 +257,7 @@ def run_offline() -> None:
             )
             clock = [0.0]
             session._clock = lambda: clock[0]  # fake clock: 30 frames per second below
+            session.handle_command("scan.auto", {"enabled": True})  # manual is the default
             session.start_scan(open_camera=False)
             cube = CubeState.solved().apply_sequence(random_scramble(20, seed=8))
             for face in ["D", "B", "F", "U", "L", "R"]:  # not the guide's order
@@ -347,6 +348,8 @@ def run_live(url: str) -> None:
     @check("live · stepping through playback solves the cube and records analytics")
     def _() -> str:
         total = state["solution"]["moveCount"]
+        command("playback.next", settle=0.3)  # the hold-the-cube step comes before move 1
+        assert state["playback"]["ready"] and state["playback"]["index"] == 0, "no hold step"
         for _ in range(total):
             command("playback.next", settle=0.12)
         time.sleep(0.6)
@@ -354,7 +357,10 @@ def run_live(url: str) -> None:
         final = CubeStateFromDict(state["playback"]["cube"])
         assert final.is_solved, "cube is not solved at the end of playback"
         assert state["analytics"]["totalSolves"] >= 1, "no analytics record written"
-        return f"{total} moves executed, cube verified solved, {state['analytics']['totalSolves']} solve(s) recorded"
+        return (
+            f"hold step, then {total} moves executed, cube verified solved, "
+            f"{state['analytics']['totalSolves']} solve(s) recorded"
+        )
 
     @check("live · calibration and settings round-trip through the engine")
     def _() -> str:

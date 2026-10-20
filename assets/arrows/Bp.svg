@@ -44,5 +44,5 @@
     <rect x="46" y="170" width="52" height="52" rx="12" fill="url(#gradA)" fill-opacity="0.40" stroke="#8B5CF6" stroke-width="2"/>
     <rect x="108" y="170" width="52" height="52" rx="12" fill="url(#gradA)" fill-opacity="0.40" stroke="#8B5CF6" stroke-width="2"/>
     <rect x="170" y="170" width="52" height="52" rx="12" fill="url(#gradA)" fill-opacity="0.40" stroke="#8B5CF6" stroke-width="2"/>
-    <path d="M 180 128 A 52 52 0 1 0 128 180" fill="none" stroke="url(#gradA)" stroke-width="15" stroke-linecap="round" filter="url(#glowA)" marker-end="url(#headA)"/>
+    <path d="M 76 128 A 52 52 0 1 1 128 180" fill="none" stroke="url(#gradA)" stroke-width="15" stroke-linecap="round" filter="url(#glowA)" marker-end="url(#headA)"/>
 </svg>

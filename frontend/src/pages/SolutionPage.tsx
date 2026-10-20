@@ -21,6 +21,32 @@ import { formatMs } from "@/lib/format";
 import { COLOR_NAMES, CUBE_COLORS } from "@/lib/colors";
 import { FACE_ORDER, type ColorCode, type FaceKey, type Facelets } from "@/lib/types";
 
+/** How to hold the cube for every instruction: the front colour facing you (the
+ *  middle sticker) and the top colour on top. Same picture style as the scan guide. */
+function HoldFigure({
+  front,
+  top,
+  paint,
+}: {
+  front: ColorCode;
+  top: ColorCode;
+  paint: (code: ColorCode) => string;
+}) {
+  return (
+    <div className="scan-guide-face hold-figure" aria-hidden="true">
+      <span className="scan-guide-top" style={{ background: paint(top) }}>
+        {COLOR_NAMES[top]} on top
+      </span>
+      <div className="scan-guide-grid">
+        {Array.from({ length: 9 }, (_, index) => (
+          <span key={index} style={index === 4 ? { background: paint(front) } : undefined} />
+        ))}
+      </div>
+      <span className="hold-figure-caption">{COLOR_NAMES[front]} facing you</span>
+    </div>
+  );
+}
+
 export default function SolutionPage({ navigate }: { navigate: (page: PageId) => void }) {
   const { snapshot, send } = useApp();
   const solution = snapshot?.solution;
@@ -96,6 +122,9 @@ export default function SolutionPage({ navigate }: { navigate: (page: PageId) =>
     centers ? <span className="face-dot" style={{ background: paint(centers[face]) }} /> : null;
   const centreName = (face: FaceKey, fallback: string) =>
     centers ? COLOR_NAMES[centers[face]].toLowerCase() : fallback;
+  // Before move 1 the user confirms they hold the cube the right way (see "ready").
+  const ready = playback?.ready ?? true;
+  const shownNext = ready ? playback?.next : playback?.current;
 
   return (
     <>
@@ -122,11 +151,13 @@ export default function SolutionPage({ navigate }: { navigate: (page: PageId) =>
       {/* Player -------------------------------------------------------- */}
       <div className="split">
         <Card className="player-card">
-          <p className="hold-note">
-            Hold the cube with {centreDot("F")} <b>{centreName("F", "the front")}</b> facing you and{" "}
-            {centreDot("U")} <b>{centreName("U", "the top")}</b> on top. Every step is from your
-            point of view.
-          </p>
+          {ready && (
+            <p className="hold-note">
+              Hold the cube with {centreDot("F")} <b>{centreName("F", "the front")}</b> facing you and{" "}
+              {centreDot("U")} <b>{centreName("U", "the top")}</b> on top. Every step is from your
+              point of view.
+            </p>
+          )}
           <div className="player-stage">
             {executing ? (
               <CameraView aspect="4 / 3" />
@@ -143,7 +174,19 @@ export default function SolutionPage({ navigate }: { navigate: (page: PageId) =>
 
             <div className="player-side">
               <div className="move-hero">
-                {playback?.current ? (
+                {playback?.current && !ready ? (
+                  <>
+                    {centers && <HoldFigure front={centers.F} top={centers.U} paint={paint} />}
+                    <p className="move-hero-instruction">
+                      Before the first move, hold the cube like the picture:{" "}
+                      {centreName("F", "the front")} facing you, {centreName("U", "the top")} on top.
+                    </p>
+                    <p className="move-hero-label">Keep holding it this way for every move.</p>
+                    <Button variant="primary" size="sm" onClick={() => send("playback.next")}>
+                      I'm holding it like this · show move 1
+                    </Button>
+                  </>
+                ) : playback?.current ? (
                   <>
                     <MoveGlyph move={playback.current} size={148} key={`${playback.current.notation}-${index}`} />
                     <div className="move-hero-notation">{playback.current.notation}</div>
@@ -166,9 +209,9 @@ export default function SolutionPage({ navigate }: { navigate: (page: PageId) =>
                   <small>Previous</small>
                   <b>{playback?.previous?.notation ?? "—"}</b>
                 </div>
-                <div className="neighbour" data-role="next" title={playback?.next?.instruction}>
+                <div className="neighbour" data-role="next" title={shownNext?.instruction}>
                   <small>Next</small>
-                  <b>{playback?.next?.notation ?? "—"}</b>
+                  <b>{shownNext?.notation ?? "—"}</b>
                 </div>
               </div>
             </div>
@@ -187,7 +230,7 @@ export default function SolutionPage({ navigate }: { navigate: (page: PageId) =>
               iconOnly
               icon={<IconPrev size={16} />}
               onClick={() => send("playback.prev")}
-              disabled={index === 0}
+              disabled={index === 0 && !ready}
               aria-label="Previous move"
               title="Previous move (←)"
             />
@@ -214,7 +257,9 @@ export default function SolutionPage({ navigate }: { navigate: (page: PageId) =>
                 striped={playback?.playing}
                 label={
                   <>
-                    <span>Move {Math.min(index + 1, total)} of {total}</span>
+                    <span>
+                      {ready ? `Move ${Math.min(index + 1, total)} of ${total}` : `Get ready · ${total} moves`}
+                    </span>
                     <b style={{ marginLeft: "auto", color: "var(--ink)" }}>
                       {Math.round((playback?.progress ?? 0) * 100)}%
                     </b>
@@ -225,7 +270,18 @@ export default function SolutionPage({ navigate }: { navigate: (page: PageId) =>
           </div>
 
           <SliderRow
-            label="Playback speed"
+            label="Auto play: time per move"
+            hint="How long each move is shown before the next one"
+            value={(settings?.autoplay_interval_ms ?? 8000) / 1000}
+            min={1}
+            max={20}
+            step={0.5}
+            suffix=" s"
+            onChange={(value) => send("settings.update", { autoplay_interval_ms: Math.round(value * 1000) })}
+          />
+          <SliderRow
+            label="Animation speed"
+            hint="How fast the 3D cube turns"
             value={settings?.animation_speed ?? 1}
             min={0.25}
             max={3}
@@ -274,7 +330,7 @@ export default function SolutionPage({ navigate }: { navigate: (page: PageId) =>
       {/* Physical guidance --------------------------------------------- */}
       <Card
         title="Physical execution steps"
-        description="A person cannot turn the hidden back face directly, so B moves become a whole-cube rotation plus a front turn."
+        description="Another way to follow the solution: half turns split into two quarter turns, and each back (B) move done by turning the whole cube around (↻), turning the front, then turning it back."
       >
         <div className="physical-strip">
           {(snapshot?.physicalSteps ?? []).map((step, position) => (

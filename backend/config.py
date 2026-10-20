@@ -157,7 +157,9 @@ class Settings:
 
     # Playback ---------------------------------------------------------------
     animation_speed: float = 1.0
-    autoplay_interval_ms: int = 900
+    #: Auto play shows each move this long before the next one: enough time to read
+    #: the instruction and do the turn by hand. Not affected by animation_speed.
+    autoplay_interval_ms: int = 8000
 
     # Appearance -------------------------------------------------------------
     theme: str = "dark"  # dark | midnight | light

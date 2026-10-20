@@ -25,8 +25,7 @@ def cube():
     return CubeState.solved().apply_sequence(random_scramble(20, seed=21))
 
 
-@pytest.fixture
-def session(tmp_path):
+def new_session(tmp_path):
     events = []
     s = SolveSession(
         settings=SettingsStore(tmp_path / "settings.json"),
@@ -38,11 +37,22 @@ def session(tmp_path):
         publish_frame=lambda jpeg: None,
     )
     s.events = events
+    return s
+
+
+@pytest.fixture
+def session(tmp_path):
+    s = new_session(tmp_path)
     s.now = 100.0
     s._clock = lambda: s.now  # fake clock, moved forward by show()
     s.update_settings({"auto_capture_hold_ms": 1000})
+    s.handle_command("scan.auto", {"enabled": True})  # manual capture is the default
     s.start_scan(open_camera=False)
     return s
+
+
+def test_manual_capture_is_the_default(tmp_path):
+    assert new_session(tmp_path).snapshot()["scan"]["autoCapture"] is False
 
 
 def show(session, colors, seconds):

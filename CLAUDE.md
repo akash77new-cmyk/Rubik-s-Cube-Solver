@@ -83,11 +83,16 @@ vision engine (process 1)  backend/engine.py         single source of truth
 - Camera faces are stored as seen from outside, in the model's reading orientation (sides with U
   on top, U with B on top, D with F on top). A mirrored preview is un-mirrored in
   `capture_face()`. A face is identified by its centre colour (`face_for_center`).
-- Auto-capture waits until a side has been held still for `Settings.auto_capture_hold_ms`
-  (default 1000). Tests replace `SolveSession._clock` with a fake clock.
-- Moves are explained for a cube held with F facing the user and U on top: `Move.arrow` (which
-  way the layer moves) and `Move.instruction` (plain English). Tests check both against the cube
-  model; reuse them instead of writing new move descriptions.
+- Capture is manual by default (`SolveSession._auto_capture = False`). Auto-capture waits until a
+  side has been held still for `Settings.auto_capture_hold_ms` (default 1000). Tests that need
+  auto-capture enable it with `scan.auto`, and replace `SolveSession._clock` with a fake clock.
+- Moves are explained for a cube held with F facing the user and U on top, all seen from there
+  (the cube is never turned around): `Move.arrow` (which way the layer moves; B spins
+  counter-clockwise from the front for "B clockwise") and `Move.instruction` (plain English).
+  Tests check both against the cube model; reuse them instead of writing new move descriptions.
+- Playback starts with a "hold the cube like this" step: `playback.ready` is False until the
+  first `next` or `play`; `prev` from move 1 goes back to it. Auto play shows each move for
+  `Settings.autoplay_interval_ms` (default 8000), independent of `animation_speed`.
 
 ## 4. AI design rules (from Phase 4 on)
 1. The LLM never produces cube moves or cube state. Solvers produce moves; the validator decides validity.

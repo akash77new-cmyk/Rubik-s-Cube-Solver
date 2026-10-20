@@ -52,11 +52,9 @@ def test_each_arrow_matches_what_the_cube_model_does(notation):
         target = {"left": "L", "right": "R", "up": "U", "down": "D"}[move.arrow]
         assert after.face(target).count(CENTER["F"]) == 3
     else:
-        # F, and B after turning the cube around, are turned while looking at them:
-        # clockwise lifts the stickers on your left up to the top. Facing F, your left
-        # is the L side; facing B, it is the R side.
-        left, right = ("L", "R") if move.face == "F" else ("R", "L")
-        lifted = left if move.arrow == "clockwise" else right
+        # F and B spin as seen from the front: clockwise lifts the stickers on the left
+        # (the L side) up to the top; counter-clockwise lifts those on the right.
+        lifted = "L" if move.arrow == "clockwise" else "R"
         assert after.face("U").count(CENTER[lifted]) == 3
 
 
@@ -70,11 +68,11 @@ def test_each_instruction_says_the_same_as_its_arrow(notation):
     elif move.face in ("U", "D", "R", "L"):
         opposite = {"left": "right", "right": "left", "up": "down", "down": "up"}[move.arrow]
         assert move.arrow in text and opposite not in text
-    else:
-        assert move.arrow in text
-        assert ("counter" in text) == (move.arrow == "counter-clockwise")
-    if move.face == "B":  # matches the physical steps: turn around, turn, turn back
-        assert "turn the cube back" in text
+    else:  # F and B, seen from the front: a clockwise spin moves the top to the right
+        side = "right" if move.arrow == "clockwise" else "left"
+        assert f"its top moves to the {side}" in text
+    # Every move is done holding the cube the same way: never turn it around.
+    assert "around" not in text
 
 
 def test_move_info_for_the_ui_carries_arrow_and_instruction():
@@ -82,3 +80,10 @@ def test_move_info_for_the_ui_carries_arrow_and_instruction():
     assert info["arrow"] == "down"
     assert info["instruction"] == "Turn the right side down, towards you."
     assert len(INSTRUCTIONS) == 18
+
+
+def test_back_moves_are_explained_from_the_front():
+    move = Move.parse("B")
+    assert move.instruction == "Turn the back layer, the side facing away from you: its top moves to the left."
+    assert move.arrow == "counter-clockwise"  # from the front; its name is from behind
+    assert move.label == "Back clockwise (seen from behind)"

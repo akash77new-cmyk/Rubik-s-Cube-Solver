@@ -245,12 +245,13 @@ export default function SettingsPage() {
           />
           <SliderRow
             label="Auto-play interval"
-            value={settings.autoplay_interval_ms}
-            min={200}
-            max={3000}
-            step={50}
-            suffix=" ms"
-            onChange={(value) => update({ autoplay_interval_ms: value })}
+            hint="How long each move is shown before the next one"
+            value={settings.autoplay_interval_ms / 1000}
+            min={1}
+            max={20}
+            step={0.5}
+            suffix=" s"
+            onChange={(value) => update({ autoplay_interval_ms: Math.round(value * 1000) })}
           />
 
           <div className="setting-field" style={{ marginTop: 8 }}>

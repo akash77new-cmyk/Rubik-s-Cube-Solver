@@ -118,7 +118,9 @@ class SolveSession:
         #: True once the current scan has been saved to the dataset.
         self._dataset_saved = False
         self._face_index = 0
-        self._auto_capture = True
+        #: Manual capture by default: the user presses Capture when the side is in
+        #: place (more comfortable in real-camera tests). Auto capture is one click away.
+        self._auto_capture = False
         self._cube: Optional[CubeState] = None
         self._cube_source = "none"
         self._solution: Optional[Solution] = None
@@ -136,7 +138,7 @@ class SolveSession:
         self._hold_since = 0.0
         self._hold_progress = 0.0
 
-        self._playback = {"index": 0, "playing": False, "completed": False}
+        self._playback = self._new_playback()
         self._playback_thread: Optional[threading.Thread] = None
         self._playback_stop = threading.Event()
 
@@ -250,7 +252,12 @@ class SolveSession:
     ) -> np.ndarray:
         """Compose the HUD appropriate to the current mode."""
         move = self.current_move
-        if self._mode == "execute" and move is not None:
+        cube = self._cube
+        if self._mode == "execute" and move is not None and not self._playback["ready"]:
+            # Before move 1: show how to hold the cube (its front and top centres).
+            if cube is not None:
+                self.overlay.draw_hold_prompt(frame, cube.face("F")[4], cube.face("U")[4])
+        elif self._mode == "execute" and move is not None:
             self.overlay.draw_move(
                 frame,
                 move,
@@ -566,7 +573,7 @@ class SolveSession:
             self._cube_source = "none"
             self._solution = None
             self._solve_error = None
-            self._playback = {"index": 0, "playing": False, "completed": False}
+            self._playback = self._new_playback()
             self._mode = "idle"
             self._scan_started_at = None
         self.detector.reset_stability()
@@ -621,7 +628,7 @@ class SolveSession:
             self._solving = False
             self._solution = solution
             self._solve_id = uuid.uuid4().hex[:10]
-            self._playback = {"index": 0, "playing": False, "completed": False}
+            self._playback = self._new_playback()
             self._mode = "solution"
             self._execution_started_at = time.time()
 
@@ -636,6 +643,12 @@ class SolveSession:
     # ==================================================================
     # Playback
     # ==================================================================
+    @staticmethod
+    def _new_playback() -> Dict[str, Any]:
+        """Playback state for a fresh solution. ``ready`` stays False until the user
+        confirms they hold the cube the right way (a step shown before move 1)."""
+        return {"index": 0, "playing": False, "completed": False, "ready": False}
+
     def _set_index(self, index: int) -> None:
         solution = self._solution
         total = len(solution.moves) if solution else 0
@@ -653,19 +666,27 @@ class SolveSession:
 
         if action == "next":
             index = self._playback["index"]
-            if index < total:
-                self._log_move(solution.moves[index], index)
-            self._set_index(index + 1)
+            if not self._playback["ready"]:
+                self._set_ready(True)  # "I'm holding the cube like this": show move 1
+            else:
+                if index < total:
+                    self._log_move(solution.moves[index], index)
+                self._set_index(index + 1)
         elif action == "prev":
-            self._set_index(self._playback["index"] - 1)
+            if self._playback["index"] == 0:
+                self._set_ready(False)  # back from move 1 to the hold step
+            else:
+                self._set_index(self._playback["index"] - 1)
         elif action == "seek":
+            self._set_ready(True)
             self._set_index(int(payload.get("index", 0)))
         elif action == "restart":
             with self._lock:
-                self._playback = {"index": 0, "playing": False, "completed": False}
+                self._playback = self._new_playback()
                 self._execution_started_at = time.time()
             self._stop_autoplay()
         elif action == "play":
+            self._set_ready(True)  # autoplay starts by showing move 1
             self._start_autoplay()
         elif action == "pause":
             self._stop_autoplay()
@@ -682,6 +703,10 @@ class SolveSession:
         self._publish_event("playback", self.playback_state())
         self._broadcast_state()
         return {"ok": True}
+
+    def _set_ready(self, ready: bool) -> None:
+        with self._lock:
+            self._playback["ready"] = ready
 
     def _log_move(self, move: Move, index: int) -> None:
         self._logs.info(
@@ -704,12 +729,15 @@ class SolveSession:
         with self._lock:
             self._playback["playing"] = False
 
+    def _autoplay_seconds(self) -> float:
+        """How long auto play shows each move: exactly the Auto-play interval setting.
+        The animation speed only changes how fast the 3D cube turns, so a slow
+        animation never stretches the time per move."""
+        return max(0.08, self._settings.current.autoplay_interval_ms / 1000.0)
+
     def _autoplay_loop(self) -> None:
         while not self._playback_stop.is_set():
-            settings = self._settings.current
-            interval = settings.autoplay_interval_ms / 1000.0
-            interval = max(0.08, interval / max(settings.animation_speed, 0.1))
-            if self._playback_stop.wait(interval):
+            if self._playback_stop.wait(self._autoplay_seconds()):
                 break
 
             solution = self._solution
@@ -775,7 +803,7 @@ class SolveSession:
             self._cube_source = "scramble"
             self._solution = None
             self._solve_error = None
-            self._playback = {"index": 0, "playing": False, "completed": False}
+            self._playback = self._new_playback()
             self._mode = "scanned"
             self._scanned = {
                 face: {
@@ -804,7 +832,7 @@ class SolveSession:
             self._cube = cube
             self._cube_source = "manual"
             self._solution = None
-            self._playback = {"index": 0, "playing": False, "completed": False}
+            self._playback = self._new_playback()
             self._mode = "scanned"
             self._scanned = {
                 face: {
@@ -1142,6 +1170,8 @@ class SolveSession:
             "total": total,
             "playing": self._playback["playing"],
             "completed": self._playback["completed"],
+            # False until the user confirms the hold position (shown before move 1).
+            "ready": self._playback["ready"],
             "progress": round(index / total, 4) if total else 0.0,
             "current": move.to_dict() if move else None,
             "previous": previous.to_dict() if previous else None,

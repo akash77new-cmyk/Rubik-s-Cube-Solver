@@ -190,7 +190,9 @@ def build_arrow_svg(face: str, modifier: str) -> str:
     ]
 
     if face in ("F", "B"):
-        body.append(_curved_arrow(clockwise, double))
+        # Drawn as seen from the front. B "clockwise" is named as seen from behind, so
+        # from the front it spins the other way (backend.core.moves.TURN_ARROWS).
+        body.append(_curved_arrow(clockwise if face == "F" else not clockwise, double))
     elif face in ("U", "D"):
         y = 20 if face == "U" else 236
         # The arrow shows the way the layer's front stickers move, seen from the front:
