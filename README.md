@@ -16,7 +16,8 @@ and solves it with the Kociemba two-phase algorithm — wrapped in a real deskto
 ## What it does
 
 Point a webcam at each face of a scrambled cube. The vision pipeline segments the stickers by
-HSV colour, builds a validated 54-facelet cube state, feeds it to the Kociemba two-phase
+HSV colour, builds a fully validated cube state (every piece identified; twist, flip and parity
+checked), feeds it to the Kociemba two-phase
 solver, and walks you through the solution move by move — with a synchronised 3D cube, graphical
 rotation arrows drawn over the live feed, and an analytics dashboard tracking every run.
 
@@ -31,6 +32,7 @@ rotation arrows drawn over the live feed, and an analytics dashboard tracking ev
 | **Computer-vision pipeline** | Threaded OpenCV capture → bilateral denoise → HSV → 3×3 patch sampling with a *circular-median* hue (survives the red 179/0 wrap) → per-sticker confidence. |
 | **HSV colour segmentation** | Six tunable HSV boxes with hue wrap-around, scored by how centrally a sample sits inside its box. Built-in `default` / `low-light` / `legacy` presets plus user profiles. |
 | **Cube state & move simulation** | Immutable 54-facelet model. Every turn returns a *new* state, so solution playback scrubs forwards and backwards instantly. |
+| **Full validation** | Every corner and edge is identified and the three invariants (twist, flip, parity) are checked. Only 1 in 12 ways of assembling a cube is solvable. Each problem is reported with the exact stickers involved. Cross-checked against Kociemba's reference implementation. |
 | **Kociemba two-phase solver** | Pluggable backend: the native C extension when installed, otherwise Kociemba's own pure-Python implementation. Solutions are ≤ 20 moves, found in single-digit milliseconds. |
 | **Socket-based IPC** | The vision engine runs as its **own OS process** and publishes state and JPEG frames over a length-prefixed TCP protocol. The web server is a pure relay. |
 | **Real-time synchronisation** | One Socket.IO connection mirrors the engine snapshot into React. Every page reads the same state; every action is a single command going the other way. |
@@ -94,8 +96,9 @@ read locks, and the cube contour. Beside it: live HSV values and confidence per 
 
 ### 3 · Scanning Pipeline
 Six faces captured in `U → R → F → D → L → B` order. Auto-capture fires when a read is stable
-across consecutive frames. Each face tile fills in as it lands, and a colour census verifies
-nine of every colour before the solver is allowed to run.
+across consecutive frames. Each face tile fills in as it lands, and full validation (colours,
+pieces, twist, flip, parity) runs before the solver is allowed to start, and the stickers behind
+each problem are outlined on the net.
 
 ![Scanner](docs/screenshots/03-scanner.png)
 
@@ -196,6 +199,8 @@ backend/
   config.py            paths + persisted settings
   core/                pure domain logic — no OpenCV, no Flask, no sockets
     cube.py            CubeState: 54 facelets, move simulation, validation
+    cubie.py           8 corners + 12 edges, twist / flip / parity, G1 check
+    validation.py      structured validation issues
     moves.py           Singmaster notation, metadata, physical-turn expansion
     solver.py          SolverEngine + pluggable Kociemba backends
     color.py           HSV boxes, classification with confidence, profiles

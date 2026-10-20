@@ -51,6 +51,8 @@ vision engine (process 1)  backend/engine.py         single source of truth
    • FaceDetector     backend/vision/detector.py    HSV sampling, confidence, stability
    • OverlayRenderer  backend/vision/overlay.py     HUD drawn into frames
    • SolverEngine     backend/core/solver.py        Kociemba: C backend, else pure Python
+   • cubie model      backend/core/cubie.py         piece model, twist / flip / parity, in_g1
+   • issues           backend/core/validation.py    structured validation issues
 ```
 
 - **Command flow:** the UI emits `command` with `{command, payload}` → the server relays it to the
@@ -70,6 +72,9 @@ vision engine (process 1)  backend/engine.py         single source of truth
 - `CubeState.to_facelet_string()` maps colours to faces via the centres, giving Kociemba's 54-char
   `URFDLB` facelet string.
 - `CubeState` is immutable: `apply()` returns a new state.
+- `validate()` returns `ValidationResult.issues`. Each issue has a `code` (`IssueCode`), `message`,
+  `stickers`, `pieces` and `details`. Code that reacts to problems (e.g. the Phase 5 agent) must use
+  `code` and `details`, never parse `message`.
 
 ## 4. AI design rules (from Phase 4 on)
 1. The LLM never produces cube moves or cube state. Solvers produce moves; the validator decides validity.
