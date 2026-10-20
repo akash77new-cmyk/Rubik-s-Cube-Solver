@@ -37,6 +37,8 @@ rotation arrows drawn over the live feed, and an analytics dashboard tracking ev
 | **Socket-based IPC** | The vision engine runs as its **own OS process** and publishes state and JPEG frames over a length-prefixed TCP protocol. The web server is a pure relay. |
 | **Real-time synchronisation** | One Socket.IO connection mirrors the engine snapshot into React. Every page reads the same state; every action is a single command going the other way. |
 | **Analytics** | Persisted solve history: move counts, search times, execution times, move distribution and running average sticker confidence. |
+| **Guided scanning** | Colour-only step guide; faces identified by their centre colour (no duplicates, any order); mirrored previews un-mirrored; orientation mistakes repaired by a smallest-change search that only applies unique fixes. |
+| **Plain-English moves** | Every move says which way to turn for a cube held with the front facing you ("Turn the top layer to the left."). Arrows and instructions are checked against the cube model by tests. |
 | **Training-data collection** | Every sticker keeps its reading: colour, confidence, the best three colours, and whether the detector was unsure. Confirmed scans are saved as 54 labelled 32×32 sticker crops (`ml/data/`), balanced by design and with corrected stickers marked as hard examples. |
 
 ---
@@ -96,17 +98,17 @@ read locks, and the cube contour. Beside it: live HSV values and confidence per 
 ![Live Camera](docs/screenshots/02-camera.png)
 
 ### 3 · Scanning Pipeline
-Six faces captured in `U → R → F → D → L → B` order. Auto-capture fires when a read is stable
-across consecutive frames. Each face tile fills in as it lands, and full validation (colours,
-pieces, twist, flip, parity) runs before the solver is allowed to start, and the stickers behind
-each problem are outlined on the net. Unsure stickers get a dashed amber outline, and hovering a
-sticker shows what the camera saw. After a valid scan, the Training data card saves it to the
-dataset.
+A scan guide shows each step with colours only: green facing the camera with white on top,
+then red, blue and orange, then white (blue on top) and yellow (green on top). Each side is
+recognised by its centre colour, so it is captured once, in any order. A mirrored camera
+preview is handled, and a side held the wrong way up is repaired automatically when the fix is
+unique. The guide sits beside the camera, and a side is captured once it has been held still for
+a moment (1 s by default, adjustable in Settings); a "Hold still" bar shows the progress.
 
-> **Known issue:** real-camera scans can't produce a valid cube yet. The mirrored camera preview
-> is read as it is shown, auto-capture can capture one face several times, and the face hints are
-> unclear. A follow-up phase (2B) fixes all three. Until then, use **Demo scramble** to try the
-> solver.
+Each face tile fills in as it lands, and full validation (colours, pieces, twist, flip, parity)
+runs before the solver is allowed to start, and the stickers behind each problem are outlined on
+the net. Unsure stickers get a dashed amber outline, and hovering a sticker shows what the camera
+saw. After a valid scan, the Training data card saves it to the dataset.
 
 ![Scanner](docs/screenshots/03-scanner.png)
 
@@ -119,8 +121,10 @@ under a glare, or apply turns manually to exercise the move simulation.
 
 ### 5 · Solution Visualizer
 Current / previous / next move, the full sequence as clickable badges, play · pause · step ·
-restart · speed, and the 3D cube **animating the actual layer turn** after every move.
-"Camera guidance" overlays the rotation arrow onto the live feed instead.
+restart · speed, and the 3D cube **animating the actual layer turn** after every move. Each move
+is also written in plain English for a cube held with green facing you and white on top, e.g.
+*R: "Turn the right side up, away from you."* "Camera guidance" overlays the rotation arrow and
+the instruction onto the live feed instead.
 
 ![Solution](docs/screenshots/05-solution.png)
 
@@ -209,7 +213,8 @@ backend/
     cube.py            CubeState: 54 facelets, move simulation, validation
     cubie.py           8 corners + 12 edges, twist / flip / parity, G1 check
     validation.py      structured validation issues
-    moves.py           Singmaster notation, metadata, physical-turn expansion
+    moves.py           Singmaster notation, metadata, plain-English instructions, physical turns
+    scanning.py        scan guide, face identification, orientation repair
     solver.py          SolverEngine + pluggable Kociemba backends
     color.py           HSV boxes, classification with confidence, profiles
   vision/
@@ -255,6 +260,9 @@ python "python code files/cube_viewer.py"      # net viewer, subscribes to the e
 python "python code files/hsv_calibrator.py"   # trackbar calibration, saves real profiles
 ```
 
+The legacy CLI scanner does not have guided scanning (scan guide, centre-based face identity,
+mirror handling, orientation repair). The web app is the supported scanner.
+
 ---
 
 ## Development
@@ -262,9 +270,9 @@ python "python code files/hsv_calibrator.py"   # trackbar calibration, saves rea
 ```bash
 python -m pip install -r requirements-dev.txt   # app + pytest + Socket.IO client
 
-pytest                          # unit tests (about a second)
+pytest                          # unit tests (about 20 s: scanning tests run the real detector)
 pytest -m "not slow"            # skip the solver tests
-python tools/verify.py          # end-to-end pipeline check (9 offline checks)
+python tools/verify.py          # end-to-end pipeline check (12 offline checks)
 python tools/verify.py --live   # + 6 checks against a running app (python run.py --headless)
 ```
 

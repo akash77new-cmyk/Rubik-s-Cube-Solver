@@ -53,6 +53,7 @@ vision engine (process 1)  backend/engine.py         single source of truth
    • SolverEngine     backend/core/solver.py        Kociemba: C backend, else pure Python
    • cubie model      backend/core/cubie.py         piece model, twist / flip / parity, in_g1
    • issues           backend/core/validation.py    structured validation issues
+   • scanning         backend/core/scanning.py      scan guide, centre-based face identity, orientation repair
    • DatasetStore     backend/services/dataset.py   confirmed scans → labelled crops
 ```
 
@@ -79,6 +80,14 @@ vision engine (process 1)  backend/engine.py         single source of truth
 - Each camera-captured face in `_scanned` has `stickers`: what the detector saw (`color`,
   `confidence`, `alternatives` = best three, `hsv`, `uncertain`). `colors` holds the current,
   possibly corrected colours. Crops live only in `SolveSession._scan_crops` and on disk.
+- Camera faces are stored as seen from outside, in the model's reading orientation (sides with U
+  on top, U with B on top, D with F on top). A mirrored preview is un-mirrored in
+  `capture_face()`. A face is identified by its centre colour (`face_for_center`).
+- Auto-capture waits until a side has been held still for `Settings.auto_capture_hold_ms`
+  (default 1000). Tests replace `SolveSession._clock` with a fake clock.
+- Moves are explained for a cube held with F facing the user and U on top: `Move.arrow` (which
+  way the layer moves) and `Move.instruction` (plain English). Tests check both against the cube
+  model; reuse them instead of writing new move descriptions.
 
 ## 4. AI design rules (from Phase 4 on)
 1. The LLM never produces cube moves or cube state. Solvers produce moves; the validator decides validity.
@@ -131,6 +140,7 @@ vision engine (process 1)  backend/engine.py         single source of truth
 | 0 | Foundation + first deploy | ✅ |
 | 1 | Full cube validation: cubie model, twist / flip / parity, structured errors | ✅ |
 | 2 | Per-sticker detection data + dataset collection | ✅ |
+| 2B | Guided scanning: centre-based face identity, un-mirroring, orientation repair | ⬜ |
 | 3 | Database: Neon Postgres, SQLAlchemy, Alembic, pgvector | ⬜ |
 | 4 | AI foundation: LLM client, tool registry, tracing, fallbacks | ⬜ |
 | 5 | Smart Repair Agent | ⬜ |
