@@ -53,6 +53,7 @@ vision engine (process 1)  backend/engine.py         single source of truth
    • SolverEngine     backend/core/solver.py        Kociemba: C backend, else pure Python
    • cubie model      backend/core/cubie.py         piece model, twist / flip / parity, in_g1
    • issues           backend/core/validation.py    structured validation issues
+   • DatasetStore     backend/services/dataset.py   confirmed scans → labelled crops
 ```
 
 - **Command flow:** the UI emits `command` with `{command, payload}` → the server relays it to the
@@ -75,6 +76,9 @@ vision engine (process 1)  backend/engine.py         single source of truth
 - `validate()` returns `ValidationResult.issues`. Each issue has a `code` (`IssueCode`), `message`,
   `stickers`, `pieces` and `details`. Code that reacts to problems (e.g. the Phase 5 agent) must use
   `code` and `details`, never parse `message`.
+- Each camera-captured face in `_scanned` has `stickers`: what the detector saw (`color`,
+  `confidence`, `alternatives` = best three, `hsv`, `uncertain`). `colors` holds the current,
+  possibly corrected colours. Crops live only in `SolveSession._scan_crops` and on disk.
 
 ## 4. AI design rules (from Phase 4 on)
 1. The LLM never produces cube moves or cube state. Solvers produce moves; the validator decides validity.
@@ -98,6 +102,7 @@ vision engine (process 1)  backend/engine.py         single source of truth
   large tables; don't rely on it in production.
 - **Until Phase 9 the live site has one shared session for every visitor.**
 - Keep per-frame server work light (0.1 CPU).
+- Dataset collection is off in production (`CUBE_DATASET_ENABLED`); `ml/data/` is committed to git.
 
 ## 6. Commands
 | What | Command |

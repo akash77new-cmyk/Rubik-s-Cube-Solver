@@ -37,6 +37,7 @@ rotation arrows drawn over the live feed, and an analytics dashboard tracking ev
 | **Socket-based IPC** | The vision engine runs as its **own OS process** and publishes state and JPEG frames over a length-prefixed TCP protocol. The web server is a pure relay. |
 | **Real-time synchronisation** | One Socket.IO connection mirrors the engine snapshot into React. Every page reads the same state; every action is a single command going the other way. |
 | **Analytics** | Persisted solve history: move counts, search times, execution times, move distribution and running average sticker confidence. |
+| **Training-data collection** | Every sticker keeps its reading: colour, confidence, the best three colours, and whether the detector was unsure. Confirmed scans are saved as 54 labelled 32×32 sticker crops (`ml/data/`), balanced by design and with corrected stickers marked as hard examples. |
 
 ---
 
@@ -98,7 +99,14 @@ read locks, and the cube contour. Beside it: live HSV values and confidence per 
 Six faces captured in `U → R → F → D → L → B` order. Auto-capture fires when a read is stable
 across consecutive frames. Each face tile fills in as it lands, and full validation (colours,
 pieces, twist, flip, parity) runs before the solver is allowed to start, and the stickers behind
-each problem are outlined on the net.
+each problem are outlined on the net. Unsure stickers get a dashed amber outline, and hovering a
+sticker shows what the camera saw. After a valid scan, the Training data card saves it to the
+dataset.
+
+> **Known issue:** real-camera scans can't produce a valid cube yet. The mirrored camera preview
+> is read as it is shown, auto-capture can capture one face several times, and the face hints are
+> unclear. A follow-up phase (2B) fixes all three. Until then, use **Demo scramble** to try the
+> solver.
 
 ![Scanner](docs/screenshots/03-scanner.png)
 
@@ -215,6 +223,7 @@ backend/
   services/
     session.py         the state machine every UI page mirrors
     analytics.py       solve history + aggregate statistics
+    dataset.py         training-data collection (scans → labelled crops)
     logbus.py          structured ring-buffer log stream
   server/app.py        Flask + Socket.IO + MJPEG
 
@@ -222,6 +231,8 @@ frontend/src/
   state/AppStore.tsx   one socket → React state, one command channel back
   components/          cube (3D + net), move glyphs, charts, ui primitives
   pages/               the nine screens
+
+ml/data/               sticker colour dataset (see ml/data/README.md)
 
 tools/
   generate_assets.py   generates every SVG in assets/
@@ -321,6 +332,7 @@ Analytics page. This is why the project has no hard dependency on a compiler.
 | `data/settings.json` | camera, detection, overlay, playback, theme |
 | `data/hsv_profiles.json` | user-saved HSV profiles |
 | `data/solve_history.json` | persisted solve records |
+| `ml/data/scans/` | saved training scans (committed) |
 | `.cache/twophase/` | generated pruning tables (safe to delete; rebuilt on demand) |
 
 Ports, hosts, the secret key and the data folder come from environment variables - see
@@ -377,6 +389,8 @@ win over it.
 | `CUBE_ENGINE_HOST` / `CUBE_ENGINE_PORT` | `127.0.0.1` / `9999` | same |
 | `CUBE_ALLOWED_ORIGINS` | `*` | `*` (tightened in Phase 12) |
 | `CUBE_DATA_DIR` | `./data` | `./data` |
+| `CUBE_DATASET_ENABLED` | on | off |
+| `CUBE_DATASET_DIR` | `./ml/data` | `./ml/data` |
 
 ---
 
