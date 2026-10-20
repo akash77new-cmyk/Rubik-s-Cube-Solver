@@ -222,6 +222,52 @@ def run_offline() -> None:
             assert not wrong, f"wrong labels: {wrong}"
         return "6 synthetic faces scanned by the real detector -> 54 PNGs, all labels correct"
 
+    @check("guided scan · any order, mirrored preview and a rotated face -> the right cube")
+    def _() -> str:
+        import tempfile
+
+        from backend.config import SettingsStore
+        from backend.core.color import ProfileStore
+        from backend.core.cube import FACE_ORDER
+        from backend.core.scanning import orientation_map, reorder
+        from backend.core.solver import SolverEngine
+        from backend.services.analytics import AnalyticsStore
+        from backend.services.logbus import LogBus
+        from backend.services.session import SolveSession
+
+        def face_frame(codes: List[str]) -> "np.ndarray":
+            frame = np.full((720, 960, 3), 28, np.uint8)
+            for index, code in enumerate(codes):
+                row, col = divmod(index, 3)
+                x, y = 480 + (col - 1) * 96, 360 + (row - 1) * 96
+                cv2.rectangle(frame, (x - 42, y - 42), (x + 42, y + 42), COLOR_BGR[code], -1)
+            return cv2.flip(frame, 1)  # a selfie-style (mirrored) camera preview
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            events: List[str] = []
+            session = SolveSession(
+                settings=SettingsStore(root / "settings.json"),
+                profiles=ProfileStore(root / "profiles.json"),
+                solver=SolverEngine(),
+                logs=LogBus(),
+                analytics=AnalyticsStore(root / "history.json"),
+                publish_event=lambda event, data: events.append(event),
+                publish_frame=lambda jpeg: None,
+            )
+            session.start_scan(open_camera=False)
+            cube = CubeState.solved().apply_sequence(random_scramble(20, seed=8))
+            for face in ["D", "B", "F", "U", "L", "R"]:  # not the guide's order
+                colors = cube.face(face)
+                if face == "L":
+                    colors = reorder(colors, orientation_map(1))  # held a quarter turn off
+                for _ in range(15):  # half a second held still: must be captured once
+                    session._process_frame(face_frame(colors), mirrored=True)
+            scanned = {f: session._scanned[f]["colors"] for f in FACE_ORDER}
+            assert scanned == {f: cube.face(f) for f in FACE_ORDER}, "scanned cube is wrong"
+            assert "scan:repaired" in events, "the rotated face was not repaired"
+        return "6 faces in random order through a mirrored preview, 1 held rotated -> exact cube"
+
     # ------------------------------------------------------------------
     from backend.core.solver import solver_engine
 
