@@ -31,6 +31,8 @@ DATA_DIR = Path(os.environ.get("CUBE_DATA_DIR") or PROJECT_ROOT / "data")
 CACHE_DIR = PROJECT_ROOT / ".cache"
 SOLVER_TABLE_DIR = CACHE_DIR / "twophase"
 DOCS_DIR = PROJECT_ROOT / "docs"
+#: Training data for the Phase 11 colour classifier (committed to git; see ml/data/README.md).
+DATASET_DIR = Path(os.environ.get("CUBE_DATASET_DIR") or PROJECT_ROOT / "ml" / "data")
 
 SETTINGS_FILE = DATA_DIR / "settings.json"
 PROFILES_FILE = DATA_DIR / "hsv_profiles.json"
@@ -60,6 +62,7 @@ class RuntimeConfig:
     engine_port: int
     secret_key: str
     allowed_origins: Union[str, List[str]]    # "*" or a list of origins
+    dataset_enabled: bool                     # may scans be saved as training data?
 
     @property
     def is_production(self) -> bool:
@@ -85,6 +88,18 @@ def read_runtime_config(env: Mapping[str, str]) -> RuntimeConfig:
         else [o.strip() for o in raw_origins.split(",") if o.strip()]
     )
 
+    # Dataset collection needs a local camera and a permanent disk, so it is on by
+    # default in development and off in production (Render's disk is temporary).
+    raw_dataset = (env.get("CUBE_DATASET_ENABLED") or "").strip().lower()
+    if raw_dataset == "":
+        dataset_enabled = not production
+    elif raw_dataset in ("1", "true", "yes", "on"):
+        dataset_enabled = True
+    elif raw_dataset in ("0", "false", "no", "off"):
+        dataset_enabled = False
+    else:
+        raise ConfigError(f"CUBE_DATASET_ENABLED must be true or false, got {raw_dataset!r}")
+
     return RuntimeConfig(
         app_env=app_env,
         web_host=env.get("CUBE_WEB_HOST") or ("0.0.0.0" if production else "127.0.0.1"),
@@ -94,6 +109,7 @@ def read_runtime_config(env: Mapping[str, str]) -> RuntimeConfig:
         engine_port=int(env.get("CUBE_ENGINE_PORT") or 9999),
         secret_key=secret,
         allowed_origins=origins,
+        dataset_enabled=dataset_enabled,
     )
 
 
