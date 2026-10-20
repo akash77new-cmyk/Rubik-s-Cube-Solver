@@ -19,10 +19,12 @@ from __future__ import annotations
 
 import copy
 import random
-from dataclasses import dataclass
+from collections import Counter
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
+from backend.core.cubie import CubieCube, analyse_facelets
 from backend.core.moves import Move, parse_sequence
+from backend.core.validation import IssueCode, ValidationIssue, ValidationResult
 
 FACE_ORDER: Tuple[str, ...] = ("U", "R", "F", "D", "L", "B")
 COLOR_CODES: Tuple[str, ...] = ("W", "Y", "R", "O", "G", "B")
@@ -61,16 +63,6 @@ _EDGE_CYCLES: Dict[str, Tuple[Sequence[str], Sequence[Sequence[int]]]] = {
 
 class InvalidCubeError(ValueError):
     """Raised when a scanned cube cannot describe a real, solvable cube."""
-
-
-@dataclass
-class ValidationResult:
-    ok: bool
-    errors: List[str]
-    warnings: List[str]
-
-    def to_dict(self) -> Dict[str, object]:
-        return {"ok": self.ok, "errors": self.errors, "warnings": self.warnings}
 
 
 def _rotate_face(stickers: List[str], turns: int) -> None:
@@ -247,36 +239,67 @@ class CubeState:
         return total
 
     def validate(self) -> ValidationResult:
-        errors: List[str] = []
-        warnings: List[str] = []
+        """Check that this sticker map is a real, solvable cube.
+
+        Checks run from simple to deep: colour codes, centres, colour counts, then
+        piece identity and the twist / flip / parity invariants (see cubie.py).
+        """
+        issues: List[ValidationIssue] = []
+
+        unknown = [
+            (face, index)
+            for face in FACE_ORDER
+            for index, code in enumerate(self._facelets[face])
+            if code not in COLOR_CODES
+        ]
+        if unknown:
+            codes = sorted({self._facelets[face][index] for face, index in unknown})
+            issues.append(ValidationIssue(
+                code=IssueCode.INVALID_COLOR,
+                message=f"Unrecognised colour code(s): {', '.join(map(str, codes))}.",
+                stickers=tuple(unknown),
+                details={"codes": codes},
+            ))
 
         centers = self.centers
-        if len(set(centers.values())) != 6:
-            errors.append(
-                "Centre colours must all differ - two faces were scanned with the "
-                "same centre colour."
-            )
+        center_counts = Counter(centers.values())
+        if len(center_counts) != 6:
+            clashing = [face for face in FACE_ORDER if center_counts[centers[face]] > 1]
+            issues.append(ValidationIssue(
+                code=IssueCode.DUPLICATE_CENTERS,
+                message=(
+                    "Centre colours must all differ, but faces "
+                    f"{', '.join(clashing[:-1])} and {clashing[-1]} have the same centre colour."
+                ),
+                stickers=tuple((face, 4) for face in clashing),
+                details={"faces": clashing},
+            ))
 
         counts = self.color_counts()
-        for code, count in counts.items():
-            if count and count != 9:
-                errors.append(
-                    f"{COLOR_NAMES.get(code, code)} appears {count} times (expected 9)."
-                )
-        unknown = [c for c in counts if c not in COLOR_CODES]
-        if unknown:
-            errors.append(f"Unrecognised colour codes: {', '.join(unknown)}")
+        for code in COLOR_CODES:
+            if counts.get(code, 0) != 9:
+                issues.append(ValidationIssue(
+                    code=IssueCode.COLOR_COUNT,
+                    message=f"{COLOR_NAMES[code]} appears {counts.get(code, 0)} times (expected 9).",
+                    details={"color": code, "count": counts.get(code, 0), "expected": 9},
+                ))
 
-        if not errors:
-            try:
-                facelets = self.to_facelet_string()
-            except InvalidCubeError as exc:
-                errors.append(str(exc))
-            else:
-                if len(facelets) != 54:
-                    errors.append("Facelet string is not 54 characters long.")
+        # Piece checks need every colour to map to exactly one face.
+        if not unknown and len(center_counts) == 6:
+            names = {face: COLOR_NAMES[centers[face]].lower() for face in FACE_ORDER}
+            issues.extend(analyse_facelets(self.to_facelet_string(), names).issues)
 
-        return ValidationResult(ok=not errors, errors=errors, warnings=warnings)
+        return ValidationResult(issues=issues)
+
+    def to_cubie(self) -> CubieCube:
+        """Pieces view of this cube. Raises InvalidCubeError if it is not valid."""
+        result = self.validate()
+        if not result.ok:
+            raise InvalidCubeError("; ".join(result.errors))
+        cubie = analyse_facelets(self.to_facelet_string()).cubie
+        if cubie is None:  # cannot happen after a passing validate(); kept as a safety net
+            raise InvalidCubeError("Cube could not be converted to pieces")
+        return cubie
 
     # ------------------------------------------------------------------
     # Serialisation
