@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Button, Card, ProgressBar, Segmented, Tag, EmptyState } from "@/components/ui";
 import { CameraView, DetectionSummary } from "@/components/CameraView";
 import { CubeNet, FaceGrid } from "@/components/cube";
+import { ValidationIssueList, flaggedStickers } from "@/components/validation";
 import { PageHead, type PageId } from "@/components/layout";
 import { ColorSummary } from "@/components/charts";
 import {
@@ -17,6 +19,7 @@ import { COLOR_CODES, FACE_ORDER, type ColorCode } from "@/lib/types";
 
 export default function ScannerPage({ navigate }: { navigate: (page: PageId) => void }) {
   const { snapshot, detection, send } = useApp();
+  const [selectedIssue, setSelectedIssue] = useState<number | null>(null);
   const scan = snapshot?.scan;
   const settings = snapshot?.settings;
   const validation = snapshot?.validation;
@@ -206,6 +209,7 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
             )}
             activeFace={scan?.current ?? null}
             palette={settings?.cube_palette}
+            flagged={complete && validation && !validation.ok ? flaggedStickers(validation.issues, selectedIssue) : undefined}
           />
         </Card>
 
@@ -220,7 +224,7 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
             <EmptyState
               icon={<IconCheck size={26} />}
               title="Cube state is valid"
-              message="Nine of each colour, six distinct centres, and a solvable configuration."
+              message="Every piece is real, and twist, flip and parity all check out."
               action={
                 <Button variant="primary" onClick={() => { send("solve.run"); navigate("solution"); }}>
                   Solve now
@@ -232,13 +236,14 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
               <Tag tone="critical">
                 <IconAlert size={12} /> {validation?.errors.length ?? 0} problem(s)
               </Tag>
-              {validation?.errors.map((error) => (
-                <p key={error} style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
-                  • {error}
-                </p>
-              ))}
+              <ValidationIssueList issues={validation?.issues ?? []} selected={selectedIssue} onSelect={setSelectedIssue} />
               <p style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
-                Fix individual stickers on the Cube Viewer page, or re-scan the affected face.
+                Click a problem to outline its stickers on the net. Fix them on the Cube Viewer page, or
+                re-scan the affected face.
+              </p>
+              <p style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
+                Why a cube can be impossible: only 1 in 12 ways of putting the pieces together can be
+                solved. Face turns never twist one corner, flip one edge, or swap just two pieces.
               </p>
               <Button size="sm" onClick={() => navigate("viewer")}>
                 Open cube editor

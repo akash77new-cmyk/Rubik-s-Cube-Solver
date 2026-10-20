@@ -310,7 +310,7 @@ export default function DashboardPage({ navigate }: { navigate: (page: PageId) =
             { step: "01", name: "Capture", detail: "Threaded OpenCV grab, mirrored, paced to target FPS" },
             { step: "02", name: "Segment", detail: "Bilateral denoise → HSV → 3×3 patch median" },
             { step: "03", name: "Classify", detail: "Six HSV boxes → colour + confidence" },
-            { step: "04", name: "Model", detail: "54 facelets → validated cube state" },
+            { step: "04", name: "Model", detail: "54 stickers → 8 corners + 12 edges, validated" },
             { step: "05", name: "Solve", detail: "Kociemba two-phase search ≤ 20 moves" },
             { step: "06", name: "Guide", detail: "Animated 3D playback + arrow overlays" },
           ].map((stage) => (

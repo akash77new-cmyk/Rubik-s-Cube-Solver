@@ -32,10 +32,21 @@ export interface CubeInfo {
   solvedStickers: number;
 }
 
+/** One reason why a cube is impossible (see backend/core/validation.py). */
+export interface ValidationIssue {
+  code: string;
+  message: string;
+  /** Stickers involved: face + 0-based index in reading order. */
+  stickers: { face: FaceKey; index: number }[];
+  pieces: string[];
+  details: Record<string, unknown>;
+}
+
 export interface ValidationInfo {
   ok: boolean;
   errors: string[];
   warnings: string[];
+  issues: ValidationIssue[];
 }
 
 export interface StickerReading {

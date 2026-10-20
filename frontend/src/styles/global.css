@@ -1618,3 +1618,27 @@ select { cursor: pointer; }
   .net { --face-size: 58px; gap: var(--sp-2); }
   .page-head h1 { font-size: 20px; }
 }
+
+/* ---- Validation issues (Phase 1) --------------------------------------- */
+.net-face .sticker[data-flagged="true"] {
+  outline: 2px solid var(--status-critical);
+  outline-offset: 1px;
+  animation: sticker-flag 1.4s var(--ease) infinite;
+  z-index: 2;
+}
+@keyframes sticker-flag {
+  0%, 100% { outline-color: var(--status-critical); }
+  50% { outline-color: transparent; }
+}
+.issue-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.issue {
+  display: flex; gap: 8px; align-items: flex-start; width: 100%; text-align: left;
+  padding: 8px 10px; border-radius: 10px; border: 1px solid var(--hairline);
+  background: transparent; color: var(--ink-2); font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.issue svg { flex-shrink: 0; margin-top: 2px; } /* keep the icon full size when the message wraps */
+.issue[data-located="false"] { cursor: default; }
+.issue[data-selected="true"] { border-color: var(--status-critical); color: var(--ink); }
+@media (prefers-reduced-motion: reduce) {
+  .net-face .sticker[data-flagged="true"] { animation: none; }
+}

@@ -3,8 +3,8 @@ import { Button, Card, KeyValue, Segmented, Tag, EmptyState } from "@/components
 import { Cube3D, CubeNet, SOLVED_FACELETS } from "@/components/cube";
 import { PageHead, type PageId } from "@/components/layout";
 import { ColorSummary } from "@/components/charts";
+import { ValidationIssueList, flaggedStickers } from "@/components/validation";
 import {
-  IconAlert,
   IconCheck,
   IconCube,
   IconRestart,
@@ -24,6 +24,7 @@ export default function CubeViewerPage({ navigate }: { navigate: (page: PageId) 
   const [editing, setEditing] = useState(false);
   const [highlight, setHighlight] = useState<FaceKey | null>(null);
   const [resetKey, setResetKey] = useState(0);
+  const [selectedIssue, setSelectedIssue] = useState<number | null>(null);
 
   const cube = snapshot?.cube;
   const settings = snapshot?.settings;
@@ -104,6 +105,7 @@ export default function CubeViewerPage({ navigate }: { navigate: (page: PageId) 
                   onStickerClick={onSticker}
                   palette={settings?.cube_palette}
                   faceSize={view === "both" ? 82 : 104}
+                  flagged={validation && !validation.ok ? flaggedStickers(validation.issues, selectedIssue) : undefined}
                 />
               </div>
             )}
@@ -151,13 +153,7 @@ export default function CubeViewerPage({ navigate }: { navigate: (page: PageId) 
               {validation ? (validation.ok ? "valid" : `${validation.errors.length} error(s)`) : "—"}
             </KeyValue>
             {validation && !validation.ok && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-                {validation.errors.map((error) => (
-                  <p key={error} style={{ fontSize: 11.5, color: "var(--status-critical)" }}>
-                    <IconAlert size={11} /> {error}
-                  </p>
-                ))}
-              </div>
+              <div style={{ marginTop: 6 }}><ValidationIssueList issues={validation.issues} selected={selectedIssue} onSelect={setSelectedIssue} /></div>
             )}
             <div className="btn-row" style={{ marginTop: 8 }}>
               <Button
