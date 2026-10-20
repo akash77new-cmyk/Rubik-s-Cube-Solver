@@ -193,8 +193,9 @@ def build_arrow_svg(face: str, modifier: str) -> str:
         body.append(_curved_arrow(clockwise, double))
     elif face in ("U", "D"):
         y = 20 if face == "U" else 236
-        # Clockwise seen from above/below maps to opposite screen directions.
-        rightwards = clockwise if face == "U" else not clockwise
+        # The arrow shows the way the layer's front stickers move, seen from the front:
+        # U turns them to the left and D to the right (backend.core.moves.TURN_ARROWS).
+        rightwards = clockwise if face == "D" else not clockwise
         x1, x2 = (56, 196) if rightwards else (196, 56)
         body.append(_straight_arrow(x1, y, x2, y, double))
     else:  # L / R

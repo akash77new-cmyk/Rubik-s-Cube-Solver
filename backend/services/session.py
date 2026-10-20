@@ -127,6 +127,14 @@ class SolveSession:
         self._latest_detection: Optional[DetectionResult] = None
         #: True if the latest frame was mirrored (a selfie-style camera preview).
         self._latest_mirrored = False
+        #: Auto-capture hold timer (frame thread only): the face being held still, the
+        #: colours it showed, when that started, and how much of the hold time is done.
+        #: ``_clock`` is a monotonic clock that tests can replace with a fake one.
+        self._clock: Callable[[], float] = time.monotonic
+        self._hold_face: Optional[str] = None
+        self._hold_colors: Optional[List[str]] = None
+        self._hold_since = 0.0
+        self._hold_progress = 0.0
 
         self._playback = {"index": 0, "playing": False, "completed": False}
         self._playback_thread: Optional[threading.Thread] = None
@@ -231,6 +239,9 @@ class SolveSession:
                     **result.to_dict(),
                     "fps": self.camera.fps,
                     "face": self.current_face,
+                    # Auto-capture hold timer: which face is being held, and how far.
+                    "holdFace": self._hold_face,
+                    "hold": round(self._hold_progress, 3),
                 },
             )
 
@@ -382,19 +393,41 @@ class SolveSession:
         return preferred if preferred in remaining else remaining[0]
 
     def _maybe_auto_capture(self, result: DetectionResult, settings: Settings) -> None:
+        face = self._auto_capture_candidate(result, settings)
+        if face is None:
+            self._hold_face, self._hold_colors, self._hold_progress = None, None, 0.0
+            return
+        # Wait until the same nine colours have been held still for the hold time, so
+        # a side is not grabbed while the cube is still being turned into place. Any
+        # change in the read (the cube moved) starts the wait again.
+        now = self._clock()
+        if face != self._hold_face or result.colors != self._hold_colors:
+            self._hold_face, self._hold_colors, self._hold_since = face, list(result.colors), now
+        hold_seconds = max(0, settings.auto_capture_hold_ms) / 1000.0
+        held = now - self._hold_since
+        self._hold_progress = min(1.0, held / hold_seconds) if hold_seconds else 1.0
+        if held >= hold_seconds:
+            self._hold_face, self._hold_colors, self._hold_progress = None, None, 0.0
+            self.capture_face(face, auto=True)
+
+    def _auto_capture_candidate(
+        self, result: DetectionResult, settings: Settings
+    ) -> Optional[str]:
+        """The face auto-capture may take from this frame, or None."""
         if self._mode != "scan" or not self._auto_capture:
-            return
+            return None
         if not result.stable or len(result.readings) != 9:
-            return
+            return None
         # The centre is left out of the confidence check: it often carries a logo.
         outer = [reading.confidence for reading in result.readings if reading.index != 4]
         if min(outer) < settings.min_confidence:
-            return
+            return None
         # Each face is recognised by its centre colour (centres never move). A face
         # still in front of the camera after its capture is simply ignored.
         face = face_for_center(result.readings[4].color)
-        if face is not None and face not in self._scanned:
-            self.capture_face(face, auto=True)
+        if face is None or face in self._scanned:
+            return None
+        return face
 
     def _face_to_capture(self, result: Optional[DetectionResult]) -> Optional[str]:
         """The face whose centre is visible, if it still needs scanning, else the

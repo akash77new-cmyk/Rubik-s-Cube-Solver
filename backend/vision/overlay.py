@@ -103,6 +103,18 @@ def text_size(text: str, scale: float = 0.6, thickness: int = 1) -> Tuple[int, i
     return w, h
 
 
+def wrap_text(text: str, max_width: int, scale: float, thickness: int) -> List[str]:
+    """Split ``text`` into lines that fit in ``max_width`` pixels (OpenCV can't wrap)."""
+    lines: List[str] = []
+    for word in text.split():
+        candidate = f"{lines[-1]} {word}" if lines else word
+        if lines and text_size(candidate, scale, thickness)[0] <= max_width:
+            lines[-1] = candidate
+        else:
+            lines.append(word)
+    return lines
+
+
 class OverlayRenderer:
     """Draws detection results, instructions and move arrows onto frames."""
 
@@ -273,32 +285,42 @@ class OverlayRenderer:
         total: int = 0,
         turn_back: bool = False,
     ) -> np.ndarray:
-        """Draw the rotation arrow for the move the user should perform now."""
+        """Draw the move the user should perform now: its notation and name, the
+        plain-English instruction, and an arrow showing which way to turn.
+
+        ``turn_back`` marks a B move: the instruction says to turn the whole cube
+        around first, and the arrow shows the turn as seen after doing that.
+        """
         height, width = frame.shape[:2]
-
-        if turn_back:
-            self._draw_turn_cube(frame)
-            draw_glass_panel(frame, (16, 14, width - 32, 62), alpha=0.65, radius=16, border=(70, 60, 55))
-            draw_text(frame, "Rotate the whole cube to reach the Back face", (32, 52), 0.68, WARN, 2)
-            return frame
-
         if move is None:
             return frame
 
-        draw_glass_panel(frame, (16, 14, width - 32, 70), alpha=0.65, radius=16, border=(70, 60, 55))
-        draw_text(frame, move.notation, (32, 58), 1.25, ACCENT, 3)
-        draw_text(frame, move.label, (32 + 70, 44), 0.6, INK, 1)
-        if total:
-            counter = f"{index + 1} / {total}"
-            tw, _ = text_size(counter, 0.7, 2)
-            draw_text(frame, counter, (width - 32 - tw, 52), 0.7, INK, 2)
-            bar_x, bar_y, bar_w = 32, 70, width - 64
+        counter = f"{index + 1} / {total}" if total else ""
+        counter_width = text_size(counter, 0.7, 2)[0] + 24 if counter else 0
+        text_x = 124  # right of the big notation
+        scale = 0.6 if width >= 900 else 0.5
+        lines = wrap_text(move.instruction, width - 32 - text_x - counter_width, scale, 2)
+        panel_height = 54 + 26 * len(lines)
+
+        draw_glass_panel(frame, (16, 14, width - 32, panel_height), alpha=0.7, radius=16, border=(70, 60, 55))
+        draw_text(frame, move.notation, (32, 66), 1.25, ACCENT, 3)
+        draw_text(frame, move.label, (text_x, 40), 0.5, ACCENT, 1)
+        for number, line in enumerate(lines):
+            draw_text(frame, line, (text_x, 66 + 26 * number), scale, INK, 2)
+        if counter:
+            draw_text(frame, counter, (width - 32 - counter_width + 24, 52), 0.7, INK, 2)
+            bar_x, bar_y, bar_w = 32, 14 + panel_height - 10, width - 64
             cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_w, bar_y + 4), (55, 48, 45), -1)
             filled = int(bar_w * ((index + 1) / max(total, 1)))
             if filled:
                 cv2.rectangle(frame, (bar_x, bar_y), (bar_x + filled, bar_y + 4), ACCENT, -1)
 
         self._draw_rotation_arrow(frame, move)
+        if turn_back:
+            # The arrow is the back face's turn; this label says which face it is.
+            ax, ay, _ = self._face_anchor(move, width, height)
+            tw, th = text_size("BACK", 0.9, 2)
+            draw_text(frame, "BACK", (ax - tw // 2, ay + th // 2), 0.9, WARN, 2)
         return frame
 
     def _face_anchor(self, move: Move, width: int, height: int) -> Tuple[int, int, int]:
@@ -324,8 +346,9 @@ class OverlayRenderer:
         if move.face in ("F", "B"):
             self._draw_circular_arrow(frame, (ax, ay), span, move.direction)
         else:
-            vertical = move.face in ("L", "R")
-            self._draw_linear_arrow(frame, (ax, ay), span, move, vertical)
+            start, end = self.linear_arrow_ends(move, (ax, ay), span)
+            self._glow_line(frame, start, end, ACCENT)
+            self._draw_arrow_head(frame, start, end, ACCENT, span)
 
         if move.modifier == "2":
             badge = "x2"
@@ -345,29 +368,15 @@ class OverlayRenderer:
         if self.style != "outline":
             cv2.line(frame, p1, p2, (255, 255, 255), 1, cv2.LINE_AA)
 
-    def _draw_linear_arrow(
-        self,
-        frame: np.ndarray,
-        center: Tuple[int, int],
-        span: int,
-        move: Move,
-        vertical: bool,
-    ) -> None:
+    @staticmethod
+    def linear_arrow_ends(
+        move: Move, center: Tuple[int, int], span: int
+    ) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+        """Start and end of the straight arrow for a U, D, L or R turn. It points the
+        way the layer moves for the person holding the cube (``Move.arrow``)."""
         cx, cy = center
-        color = ACCENT
-        # Clockwise as seen from outside the face maps to these screen directions.
-        forward = move.direction != "ccw"
-        if vertical:
-            sign = 1 if (move.face == "R") == forward else -1
-            start = (cx, cy + sign * span)
-            end = (cx, cy - sign * span)
-        else:
-            sign = 1 if (move.face == "U") == forward else -1
-            start = (cx - sign * span, cy)
-            end = (cx + sign * span, cy)
-
-        self._glow_line(frame, start, end, color)
-        self._draw_arrow_head(frame, start, end, color, span)
+        dx, dy = {"left": (-1, 0), "right": (1, 0), "up": (0, -1), "down": (0, 1)}[move.arrow]
+        return (cx - dx * span, cy - dy * span), (cx + dx * span, cy + dy * span)
 
     def _draw_arrow_head(
         self,
@@ -414,16 +423,6 @@ class OverlayRenderer:
             cv2.polylines(frame, [np.array(points, dtype=np.int32)], False, (255, 255, 255), 1, cv2.LINE_AA)
 
         self._draw_arrow_head(frame, points[-2], points[-1], ACCENT, radius)
-
-    def _draw_turn_cube(self, frame: np.ndarray) -> None:
-        """Big 'rotate the whole cube' hint used for back-face moves."""
-        height, width = frame.shape[:2]
-        cx, cy = width // 2, height // 2 + 20
-        radius = int(min(width, height) * 0.22)
-        self._draw_circular_arrow(frame, (cx, cy), radius, "cw")
-        label = "180"
-        tw, th = text_size(label, 0.9, 2)
-        draw_text(frame, label, (cx - tw // 2, cy + th // 2), 0.9, INK, 2)
 
 
 def encode_jpeg(frame: np.ndarray, quality: int = 80) -> Optional[bytes]:

@@ -144,6 +144,9 @@ class Settings:
     grid_offset_y: int = 0
     min_confidence: float = 0.35
     active_profile: str = "default"
+    #: Auto-capture waits until a side has been held still this long, so it is not
+    #: grabbed while the cube is still being turned into place. 0 = capture at once.
+    auto_capture_hold_ms: int = 1000
 
     # Overlays ---------------------------------------------------------------
     show_grid: bool = True

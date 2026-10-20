@@ -40,6 +40,9 @@ def session(tmp_path):
         dataset=DatasetStore(tmp_path / "dataset"),
     )
     s.events = events
+    # Capture as soon as a read is stable: these tests are about faces and orientation.
+    # The hold timer has its own tests (test_auto_capture_hold.py).
+    s.update_settings({"auto_capture_hold_ms": 0})
     s.start_scan(open_camera=False)  # scan mode without opening a real camera
     return s
 

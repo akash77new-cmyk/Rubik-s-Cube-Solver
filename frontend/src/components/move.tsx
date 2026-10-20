@@ -41,7 +41,7 @@ export function MoveGlyph({
       height={size}
       viewBox="0 0 256 256"
       role="img"
-      aria-label={`${move.notation}: ${move.label}`}
+      aria-label={`${move.notation}: ${move.label}. ${move.instruction}`}
     >
       <defs>
         {/* userSpaceOnUse is required: a straight horizontal/vertical arrow has
@@ -194,10 +194,11 @@ function ArrowFor({
     return <path d={d} className={className} style={{ "--len": 300 } as never} {...common} />;
   }
 
+  // Straight arrows point the way the layer moves for the person holding the cube
+  // (move.arrow comes from backend/core/moves.py, where tests check it).
   if (move.face === "U" || move.face === "D") {
     const y = move.face === "U" ? 20 : 236;
-    const rightwards = move.face === "U" ? clockwise : !clockwise;
-    const [x1, x2] = rightwards ? [56, 196] : [196, 56];
+    const [x1, x2] = move.arrow === "right" ? [56, 196] : [196, 56];
     return (
       <path
         d={`M${x1} ${y} L${x2} ${y}`}
@@ -209,8 +210,7 @@ function ArrowFor({
   }
 
   const x = move.face === "L" ? 20 : 236;
-  const upwards = move.face === "R" ? clockwise : !clockwise;
-  const [y1, y2] = upwards ? [196, 56] : [56, 196];
+  const [y1, y2] = move.arrow === "up" ? [196, 56] : [56, 196];
   return (
     <path
       d={`M${x} ${y1} L${x} ${y2}`}
@@ -303,7 +303,7 @@ export function MoveStrip({
           key={`${move.notation}-${position}`}
           move={move}
           state={position < index ? "done" : position === index ? "active" : "pending"}
-          title={`Move ${position + 1}: ${move.label}`}
+          title={`Move ${position + 1}: ${move.label}. ${move.instruction}`}
           onClick={onSelect ? () => onSelect(position) : undefined}
         />
       ))}

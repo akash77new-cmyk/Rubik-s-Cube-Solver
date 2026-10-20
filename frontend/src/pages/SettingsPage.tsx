@@ -180,6 +180,16 @@ export default function SettingsPage() {
             step={0.05}
             onChange={(value) => update({ min_confidence: value })}
           />
+          <SliderRow
+            label="Auto-capture hold time"
+            hint="How long a side must be held still before it is captured"
+            value={(settings.auto_capture_hold_ms ?? 1000) / 1000}
+            min={0.2}
+            max={3}
+            step={0.1}
+            suffix=" s"
+            onChange={(value) => update({ auto_capture_hold_ms: Math.round(value * 1000) })}
+          />
           <KeyValue label="Active HSV profile">
             <Tag tone="brand">{settings.active_profile}</Tag>
           </KeyValue>

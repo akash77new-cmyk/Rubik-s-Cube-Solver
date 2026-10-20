@@ -74,8 +74,9 @@ export function DatasetCard() {
         </Button>
       </div>
       <p style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 6 }}>
-        {blocker ?? "Ready to save."} Only save when the net matches your real cube exactly: these
-        colours become the training labels.
+        {/* Amber when something blocks the save, so a disabled button always says why. */}
+        {blocker ? <span className="dataset-blocker">{blocker}</span> : "Ready to save."} Only save
+        when the net matches your real cube exactly: these colours become the training labels.
       </p>
     </Card>
   );

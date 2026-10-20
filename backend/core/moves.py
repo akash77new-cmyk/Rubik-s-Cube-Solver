@@ -2,14 +2,15 @@
 
 A :class:`Move` carries everything the UI needs to render a move graphically -
 which face, how many quarter turns, the rotation direction and the axis - so the
-frontend never has to re-parse notation strings.
+frontend never has to re-parse notation strings. It also says which way the turn
+moves and gives it in plain English, for a cube held with the front facing you.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Tuple
 
 FACES: tuple[str, ...] = ("U", "R", "F", "D", "L", "B")
 
@@ -31,6 +32,45 @@ FACE_AXIS: Dict[str, str] = {
     "L": "x",
     "F": "z",
     "B": "z",
+}
+
+#: Which way each turn moves, for a person holding the cube with the front (F) facing
+#: them and the top (U) on top - the orientation the solver's moves assume. For the four
+#: side layers it is the way the layer's front stickers travel; F is turned while
+#: looking at it, and so is B, after turning the whole cube around. Half turns use the
+#: clockwise entry. tests/test_moves.py checks every entry against the cube model.
+TURN_ARROWS: Dict[str, Tuple[str, str]] = {
+    # face: (clockwise, counter-clockwise)
+    "U": ("left", "right"),
+    "D": ("right", "left"),
+    "R": ("up", "down"),
+    "L": ("down", "up"),
+    "F": ("clockwise", "counter-clockwise"),
+    "B": ("clockwise", "counter-clockwise"),
+}
+
+#: The same turns in plain English. "Clockwise" alone is hard to follow for a side you
+#: are not looking at, so each instruction says which way the layer moves.
+_BACK = "Turn the whole cube around, keeping the top on top, so the back faces you. "
+INSTRUCTIONS: Dict[str, str] = {
+    "U": "Turn the top layer to the left.",
+    "U'": "Turn the top layer to the right.",
+    "U2": "Turn the top layer twice (a half turn, either way).",
+    "D": "Turn the bottom layer to the right.",
+    "D'": "Turn the bottom layer to the left.",
+    "D2": "Turn the bottom layer twice (a half turn, either way).",
+    "R": "Turn the right side up, away from you.",
+    "R'": "Turn the right side down, towards you.",
+    "R2": "Turn the right side twice (a half turn, either way).",
+    "L": "Turn the left side down, towards you.",
+    "L'": "Turn the left side up, away from you.",
+    "L2": "Turn the left side twice (a half turn, either way).",
+    "F": "Turn the front face clockwise: its top moves to the right.",
+    "F'": "Turn the front face counter-clockwise: its top moves to the left.",
+    "F2": "Turn the front face twice (a half turn, either way).",
+    "B": _BACK + "Turn that face clockwise, then turn the cube back.",
+    "B'": _BACK + "Turn that face counter-clockwise, then turn the cube back.",
+    "B2": _BACK + "Turn that face twice, then turn the cube back.",
 }
 
 _MOVE_RE = re.compile(r"^([URFDLB])(['2]?)$")
@@ -76,6 +116,17 @@ class Move:
         ]
         return f"{self.face_name} {suffix}"
 
+    @property
+    def arrow(self) -> str:
+        """Which way the turn moves, as the person holding the cube sees it."""
+        clockwise, counter = TURN_ARROWS[self.face]
+        return counter if self.modifier == "'" else clockwise
+
+    @property
+    def instruction(self) -> str:
+        """The turn in plain English, e.g. "Turn the right side up, away from you."."""
+        return INSTRUCTIONS[self.notation]
+
     def inverse(self) -> "Move":
         if self.modifier == "2":
             return self
@@ -91,6 +142,8 @@ class Move:
             "axis": self.axis,
             "quarterTurns": self.quarter_turns,
             "label": self.label,
+            "arrow": self.arrow,
+            "instruction": self.instruction,
         }
 
     # ------------------------------------------------------------------

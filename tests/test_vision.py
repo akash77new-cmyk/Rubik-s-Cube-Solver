@@ -60,6 +60,17 @@ def test_all_18_move_arrows_render(overlay_setup, face, modifier):
     assert not np.array_equal(drawn, frame), "no arrow was drawn"
 
 
+@pytest.mark.parametrize(
+    "notation, direction",
+    [("U", "left"), ("U'", "right"), ("D", "right"), ("D'", "left"),
+     ("R", "up"), ("R'", "down"), ("L", "down"), ("L'", "up")],
+)
+def test_straight_arrows_point_the_way_the_layer_moves(notation, direction):
+    start, end = OverlayRenderer.linear_arrow_ends(Move.parse(notation), (480, 360), 100)
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    assert {"left": dx < 0, "right": dx > 0, "up": dy < 0, "down": dy > 0}[direction]
+
+
 def test_turn_back_hint_renders(overlay_setup):
     frame, _, overlay = overlay_setup
     drawn = overlay.draw_move(frame.copy(), Move("B"), turn_back=True)

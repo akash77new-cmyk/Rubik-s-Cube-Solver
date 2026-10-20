@@ -222,7 +222,7 @@ def run_offline() -> None:
             assert not wrong, f"wrong labels: {wrong}"
         return "6 synthetic faces scanned by the real detector -> 54 PNGs, all labels correct"
 
-    @check("guided scan · any order, mirrored preview and a rotated face -> the right cube")
+    @check("guided scan · any order, mirrored preview, 1 s hold, a rotated face -> the right cube")
     def _() -> str:
         import tempfile
 
@@ -255,18 +255,27 @@ def run_offline() -> None:
                 publish_event=lambda event, data: events.append(event),
                 publish_frame=lambda jpeg: None,
             )
+            clock = [0.0]
+            session._clock = lambda: clock[0]  # fake clock: 30 frames per second below
             session.start_scan(open_camera=False)
             cube = CubeState.solved().apply_sequence(random_scramble(20, seed=8))
             for face in ["D", "B", "F", "U", "L", "R"]:  # not the guide's order
                 colors = cube.face(face)
                 if face == "L":
                     colors = reorder(colors, orientation_map(1))  # held a quarter turn off
-                for _ in range(15):  # half a second held still: must be captured once
-                    session._process_frame(face_frame(colors), mirrored=True)
+                frame = face_frame(colors)
+                for number in range(45):  # 1.5 s held still: captured once, after the hold
+                    session._process_frame(frame.copy(), mirrored=True)
+                    clock[0] += 1 / 30
+                    if number == 26:  # 0.9 s: the read is stable, but the 1 s hold is not over
+                        assert face not in session._scanned, f"{face} captured before the hold"
             scanned = {f: session._scanned[f]["colors"] for f in FACE_ORDER}
             assert scanned == {f: cube.face(f) for f in FACE_ORDER}, "scanned cube is wrong"
             assert "scan:repaired" in events, "the rotated face was not repaired"
-        return "6 faces in random order through a mirrored preview, 1 held rotated -> exact cube"
+        return (
+            "6 faces in random order through a mirrored preview, each captured after a 1 s "
+            "hold, 1 held rotated -> exact cube"
+        )
 
     # ------------------------------------------------------------------
     from backend.core.solver import solver_engine

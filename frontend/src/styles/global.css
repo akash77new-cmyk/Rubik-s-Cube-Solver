@@ -1684,3 +1684,26 @@ select { cursor: pointer; }
    status tag move to its own row when the tile is narrow. */
 .scan-tile-head { flex-wrap: wrap; row-gap: 4px; }
 .scan-tile-head > span { white-space: nowrap; }
+
+/* ---- Guide beside the camera, hold timer, plain-English moves (Phase 2B) - */
+/* Other two-column rows stack below 1180px; the camera and the guide stay side by
+   side down to small laptop windows, so the guide never needs scrolling to. */
+@media (max-width: 1180px) { .split.scan-split { grid-template-columns: minmax(0, 1fr) 300px; } }
+@media (max-width: 760px) { .split.scan-split { grid-template-columns: minmax(0, 1fr); } }
+.scan-side { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+.scan-side .scan-guide { margin-bottom: var(--sp-3); }
+.scan-side .scan-guide-now { gap: var(--sp-4); }
+.scan-side .scan-guide-face { width: 96px; }
+.scan-side .scan-guide-title { font-size: 17px; }
+.dataset-blocker { color: var(--status-warning); font-weight: 600; }
+.hold-note { margin-bottom: var(--sp-3); font-size: 12.5px; line-height: 1.7; color: var(--ink-2); }
+.hold-note b { color: var(--ink); }
+.face-dot {
+  display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none;
+  vertical-align: -1px; border: 1px solid var(--hairline-strong);
+}
+.move-hero-instruction {
+  max-width: 320px; text-align: center; font-size: 16px; font-weight: 650;
+  line-height: 1.35; color: var(--ink);
+}
+.move-hero-label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); }

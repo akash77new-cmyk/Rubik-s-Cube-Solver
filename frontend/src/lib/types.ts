@@ -7,6 +7,8 @@ export type FaceKey = "U" | "R" | "F" | "D" | "L" | "B";
 export type ColorCode = "W" | "Y" | "R" | "O" | "G" | "B";
 export type LogLevel = "debug" | "info" | "success" | "warn" | "error";
 export type Direction = "cw" | "ccw" | "double";
+/** Which way a turn moves for the person holding the cube (backend/core/moves.py). */
+export type TurnArrow = "left" | "right" | "up" | "down" | "clockwise" | "counter-clockwise";
 
 export const FACE_ORDER: FaceKey[] = ["U", "R", "F", "D", "L", "B"];
 export const COLOR_CODES: ColorCode[] = ["W", "Y", "R", "O", "G", "B"];
@@ -20,6 +22,9 @@ export interface MoveInfo {
   axis: "x" | "y" | "z";
   quarterTurns: number;
   label: string;
+  arrow: TurnArrow;
+  /** The turn in plain English, e.g. "Turn the right side up, away from you.". */
+  instruction: string;
 }
 
 export type Facelets = Record<FaceKey, ColorCode[]>;
@@ -86,6 +91,9 @@ export interface DetectionInfo {
   timestamp: number;
   fps?: number;
   face?: FaceKey | null;
+  /** Auto-capture hold timer: the face being held still, and how far (0 to 1). */
+  holdFace?: FaceKey | null;
+  hold?: number;
 }
 
 export interface CameraInfo {
@@ -225,6 +233,7 @@ export interface SettingsInfo {
   grid_offset_y: number;
   min_confidence: number;
   active_profile: string;
+  auto_capture_hold_ms: number;
   show_grid: boolean;
   show_labels: boolean;
   show_bounding_box: boolean;

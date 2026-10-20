@@ -18,7 +18,8 @@ import {
 } from "@/components/Icons";
 import { useApp } from "@/state/AppStore";
 import { formatMs } from "@/lib/format";
-import { FACE_ORDER, type Facelets } from "@/lib/types";
+import { COLOR_NAMES, CUBE_COLORS } from "@/lib/colors";
+import { FACE_ORDER, type ColorCode, type FaceKey, type Facelets } from "@/lib/types";
 
 export default function SolutionPage({ navigate }: { navigate: (page: PageId) => void }) {
   const { snapshot, send } = useApp();
@@ -87,6 +88,15 @@ export default function SolutionPage({ navigate }: { navigate: (page: PageId) =>
     value: solution.faceDistribution[face] ?? 0,
   }));
 
+  // Every instruction assumes the cube is held with its front centre facing you and
+  // its top centre on top. Centres never move, so the colours come from the cube.
+  const centers = snapshot?.cube?.centers;
+  const paint = (code: ColorCode) => settings?.cube_palette?.[code] ?? CUBE_COLORS[code];
+  const centreDot = (face: FaceKey) =>
+    centers ? <span className="face-dot" style={{ background: paint(centers[face]) }} /> : null;
+  const centreName = (face: FaceKey, fallback: string) =>
+    centers ? COLOR_NAMES[centers[face]].toLowerCase() : fallback;
+
   return (
     <>
       <PageHead
@@ -112,6 +122,11 @@ export default function SolutionPage({ navigate }: { navigate: (page: PageId) =>
       {/* Player -------------------------------------------------------- */}
       <div className="split">
         <Card className="player-card">
+          <p className="hold-note">
+            Hold the cube with {centreDot("F")} <b>{centreName("F", "the front")}</b> facing you and{" "}
+            {centreDot("U")} <b>{centreName("U", "the top")}</b> on top. Every step is from your
+            point of view.
+          </p>
           <div className="player-stage">
             {executing ? (
               <CameraView aspect="4 / 3" />
@@ -132,7 +147,10 @@ export default function SolutionPage({ navigate }: { navigate: (page: PageId) =>
                   <>
                     <MoveGlyph move={playback.current} size={148} key={`${playback.current.notation}-${index}`} />
                     <div className="move-hero-notation">{playback.current.notation}</div>
-                    <p style={{ fontSize: 12.5, color: "var(--ink-2)" }}>{playback.current.label}</p>
+                    <p className="move-hero-instruction">{playback.current.instruction}</p>
+                    <p className="move-hero-label">
+                      {centreDot(playback.current.face)} {playback.current.label}
+                    </p>
                   </>
                 ) : (
                   <>
@@ -144,11 +162,11 @@ export default function SolutionPage({ navigate }: { navigate: (page: PageId) =>
               </div>
 
               <div className="neighbour-row">
-                <div className="neighbour" data-role="prev">
+                <div className="neighbour" data-role="prev" title={playback?.previous?.instruction}>
                   <small>Previous</small>
                   <b>{playback?.previous?.notation ?? "—"}</b>
                 </div>
-                <div className="neighbour" data-role="next">
+                <div className="neighbour" data-role="next" title={playback?.next?.instruction}>
                   <small>Next</small>
                   <b>{playback?.next?.notation ?? "—"}</b>
                 </div>

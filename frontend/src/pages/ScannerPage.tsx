@@ -30,6 +30,11 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
   const hints = scanHints(scan);
   const steps = scan?.steps ?? [];
   const nextStep = steps.find((step) => step.face === scan?.current) ?? null;
+  // Auto-capture hold timer: a side is captured once it has been held still this long.
+  const holding = snapshot?.mode === "scan" && Boolean(scan?.autoCapture && snapshot?.camera.running);
+  const hold = holding ? detection?.hold ?? 0 : 0;
+  const holdStep = steps.find((step) => step.face === detection?.holdFace) ?? null;
+  const holdSeconds = ((settings?.auto_capture_hold_ms ?? 1000) / 1000).toFixed(1);
 
   const counts = COLOR_CODES.reduce(
     (accumulator, code) => {
@@ -105,15 +110,8 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
         </div>
       </Card>
 
-      {/* Guide --------------------------------------------------------- */}
-      {!complete && (
-        <Card title="Scan guide" description="Show each side to the camera, as pictured">
-          <ScanGuide scan={scan} palette={settings?.cube_palette} />
-        </Card>
-      )}
-
-      {/* Live + tiles -------------------------------------------------- */}
-      <div className="split">
+      {/* Live camera + guide, side by side so both stay in view ------- */}
+      <div className="split scan-split">
         <Card className="card-pad-0">
           <CameraView
             showScanline={snapshot?.mode === "scan"}
@@ -127,44 +125,69 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
                       {COLOR_NAMES[nextStep.top].toLowerCase()} on top
                     </Tag>
                   )}
-                  {detection?.stable && <Tag tone="good">ready to capture</Tag>}
+                  {scan?.autoCapture
+                    ? hold > 0 && <Tag tone="good">Hold still · {Math.round(hold * 100)}%</Tag>
+                    : detection?.stable && <Tag tone="good">ready to capture</Tag>}
                 </div>
               </>
             }
           />
         </Card>
 
-        <Card
-          title="Capture"
-          description="Manual override when auto-capture is off"
-          actions={
-            <Button
-              size="sm"
-              variant="primary"
-              disabled={!snapshot?.camera.running || complete}
-              onClick={() => send("scan.capture")}
-            >
-              Capture face
-            </Button>
-          }
-        >
-          <div style={{ display: "flex", gap: "var(--sp-4)", alignItems: "center" }}>
-            <FaceGrid colors={detection?.colors ?? null} size={98} palette={settings?.cube_palette} />
-            <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
-              <p>
-                <b style={{ color: "var(--ink)" }}>Live read</b>
-              </p>
-              <p style={{ color: "var(--ink-3)" }}>
-                {detection
-                  ? `${detection.colors.join(" ")} · weakest ${(detection.minConfidence * 100).toFixed(0)}%`
-                  : "No frame analysed yet"}
-              </p>
-            </div>
-          </div>
+        <div className="scan-side">
+          {!complete && (
+            <Card title="Scan guide" description="Show each side to the camera, as pictured">
+              <ScanGuide scan={scan} palette={settings?.cube_palette} />
+              {holding && (
+                <ProgressBar
+                  value={hold}
+                  label={
+                    <>
+                      <span>
+                        {holdStep && hold > 0
+                          ? `Hold still: capturing ${COLOR_NAMES[holdStep.center]}`
+                          : `Hold a side still for ${holdSeconds} s to capture it`}
+                      </span>
+                      <b style={{ marginLeft: "auto", color: "var(--ink)" }}>{Math.round(hold * 100)}%</b>
+                    </>
+                  }
+                />
+              )}
+            </Card>
+          )}
 
-          <h4 style={{ fontSize: 12, marginTop: 8, color: "var(--ink-3)" }}>Colour census</h4>
-          <ColorSummary counts={counts} />
-        </Card>
+          <Card
+            title="Capture"
+            description="Manual override when auto-capture is off"
+            actions={
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={!snapshot?.camera.running || complete}
+                onClick={() => send("scan.capture")}
+              >
+                Capture face
+              </Button>
+            }
+          >
+            <div style={{ display: "flex", gap: "var(--sp-4)", alignItems: "center" }}>
+              <FaceGrid colors={detection?.colors ?? null} size={98} palette={settings?.cube_palette} />
+              <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
+                <p>
+                  <b style={{ color: "var(--ink)" }}>Live read</b>
+                </p>
+                <p style={{ color: "var(--ink-3)" }}>
+                  {detection
+                    ? `${detection.colors.join(" ")} · weakest ${(detection.minConfidence * 100).toFixed(0)}%`
+                    : "No frame analysed yet"}
+                </p>
+              </div>
+            </div>
+
+            <h4 style={{ fontSize: 12, marginTop: 8, color: "var(--ink-3)" }}>Colour census</h4>
+            <ColorSummary counts={counts} />
+          </Card>
+        </div>
       </div>
 
       {/* Face tiles ---------------------------------------------------- */}
