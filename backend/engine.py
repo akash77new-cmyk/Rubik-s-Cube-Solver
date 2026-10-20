@@ -19,11 +19,12 @@ import sys
 import threading
 from typing import Any, Dict
 
-from backend.config import ENGINE_HOST, ENGINE_PORT, settings_store
+from backend.config import DATASET_DIR, ENGINE_HOST, ENGINE_PORT, RUNTIME, settings_store
 from backend.core.color import profile_store
 from backend.core.solver import solver_engine
 from backend.ipc.server import ClientConnection, EngineServer
 from backend.services.analytics import AnalyticsStore
+from backend.services.dataset import DatasetStore
 from backend.services.logbus import log_bus
 from backend.services.session import SolveSession
 
@@ -35,6 +36,8 @@ class VisionEngine:
 
     def __init__(self, host: str = ENGINE_HOST, port: int = ENGINE_PORT) -> None:
         self.analytics = AnalyticsStore()
+        # Training-data collection (Phase 2): off in production, see config.py.
+        self.dataset = DatasetStore(DATASET_DIR) if RUNTIME.dataset_enabled else None
         self.server = EngineServer(
             host=host,
             port=port,
@@ -49,6 +52,7 @@ class VisionEngine:
             analytics=self.analytics,
             publish_event=self.server.broadcast,
             publish_frame=self.server.broadcast_frame,
+            dataset=self.dataset,
         )
         # Stream every log entry to subscribers as it happens.
         log_bus.add_listener(lambda entry: self.server.broadcast("log", entry.to_dict()))
@@ -86,6 +90,8 @@ class VisionEngine:
             f"Vision engine online at {self.server.host}:{self.server.port}",
             source="engine",
         )
+        if self.dataset is not None:
+            log_bus.info(f"Dataset collection is on: {DATASET_DIR}", source="dataset")
         # Building the two-phase pruning tables can take a while on first run;
         # do it off the command path so the UI stays responsive meanwhile.
         solver_engine.warm_up_async()

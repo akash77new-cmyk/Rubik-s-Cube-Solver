@@ -40,9 +40,10 @@ from backend.core.solver import (
     Solution,
 )
 from backend.services.analytics import AnalyticsStore, SolveRecord
+from backend.services.dataset import LIGHTING_OPTIONS, DatasetStore, build_scan_record
 from backend.services.logbus import LogBus
 from backend.vision.camera import CameraStream, list_cameras
-from backend.vision.detector import DetectionResult, FaceDetector
+from backend.vision.detector import CROP_SIZE, DetectionResult, FaceDetector
 from backend.vision.overlay import OverlayRenderer, encode_jpeg
 
 PublishEvent = Callable[[str, Any], None]
@@ -77,6 +78,7 @@ class SolveSession:
         analytics: AnalyticsStore,
         publish_event: PublishEvent,
         publish_frame: PublishFrame,
+        dataset: Optional[DatasetStore] = None,
     ) -> None:
         self._settings = settings
         self._profiles = profiles
@@ -85,6 +87,8 @@ class SolveSession:
         self._analytics = analytics
         self._publish_event = publish_event
         self._publish_frame = publish_frame
+        #: None when dataset collection is off (production).
+        self._dataset = dataset
 
         config = settings.current
         self.camera = CameraStream(
@@ -105,6 +109,12 @@ class SolveSession:
         self._lock = threading.RLock()
         self._mode = "idle"
         self._scanned: Dict[str, Dict[str, Any]] = {}
+        #: Sticker crops of the faces captured by the camera (face -> 9 images).
+        #: Kept apart from _scanned because images are never broadcast. Cleared
+        #: whenever the cube stops matching what the camera saw.
+        self._scan_crops: Dict[str, List[np.ndarray]] = {}
+        #: True once the current scan has been saved to the dataset.
+        self._dataset_saved = False
         self._face_index = 0
         self._auto_capture = True
         self._cube: Optional[CubeState] = None
@@ -373,12 +383,17 @@ class SolveSession:
                 return {"ok": False, "error": "No detection available yet"}
 
             self._scanned[target] = {
+                # "colors" is the face's current colours: corrections update it.
                 "colors": result.colors,
                 "confidence": result.mean_confidence,
                 "minConfidence": result.min_confidence,
                 "timestamp": time.time(),
                 "auto": auto,
+                # What the detector saw, per sticker: colour, confidence, the best
+                # three colours and whether it was unsure. Never changed afterwards.
+                "stickers": [reading.to_dict() for reading in result.readings],
             }
+            self._scan_crops[target] = list(result.crops)
             self._face_index = min(self._face_index + 1, len(FACE_ORDER))
             self.detector.reset_stability()
 
@@ -432,6 +447,8 @@ class SolveSession:
     def reset_scan(self) -> None:
         with self._lock:
             self._scanned.clear()
+            self._scan_crops.clear()
+            self._dataset_saved = False
             self._face_index = 0
             self._cube = None
             self._cube_source = "none"
@@ -658,6 +675,7 @@ class SolveSession:
                 }
                 for face in FACE_ORDER
             }
+            self._scan_crops.clear()  # the cube no longer matches the camera images
             self._face_index = len(FACE_ORDER)
             self._scan_started_at = time.time()
         self._logs.info(
@@ -686,6 +704,7 @@ class SolveSession:
                 }
                 for face in FACE_ORDER
             }
+            self._scan_crops.clear()  # the cube no longer matches the camera images
         self._logs.info("Cube reset to solved", source="cube")
         self._broadcast_state()
         return {"ok": True}
@@ -713,6 +732,7 @@ class SolveSession:
                 }
                 for face in FACE_ORDER
             }
+            self._scan_crops.clear()  # the cube no longer matches the camera images
         self._logs.info(f"Applied moves: {notation}", source="cube")
         self._broadcast_state()
         return {"ok": True, "cube": cube.to_dict()}
@@ -736,6 +756,89 @@ class SolveSession:
             entry["colors"] = facelets[face]
         self._broadcast_state()
         return {"ok": True}
+
+    # ==================================================================
+    # Dataset (training data for the Phase 11 colour classifier)
+    # ==================================================================
+    def _dataset_blocker(self) -> Optional[str]:
+        """Why the current cube can't be saved to the dataset, or None if it can."""
+        if self._dataset is None:
+            return "Dataset collection is turned off on this server."
+        if self._dataset_saved:
+            return "This scan is already saved. Reset and scan the cube again."
+        if any(len(self._scan_crops.get(face, [])) != 9 for face in FACE_ORDER):
+            return (
+                "Scan all six faces with the camera first. Turning, scrambling or "
+                "resetting the cube clears the scan."
+            )
+        if self._cube is None or not self._cube.validate().ok:
+            return "Fix the problems first. Only a valid cube can be saved."
+        return None
+
+    def dataset_state(self) -> Dict[str, Any]:
+        with self._lock:
+            blocker = self._dataset_blocker()
+            saved = self._dataset_saved
+        return {
+            "enabled": self._dataset is not None,
+            "canSave": blocker is None,
+            "reason": blocker,
+            "saved": saved,
+            "lightingOptions": [
+                {"value": key, "label": label} for key, label in LIGHTING_OPTIONS.items()
+            ],
+            "stats": self._dataset.stats() if self._dataset is not None else None,
+        }
+
+    def save_to_dataset(self, lighting: str) -> Dict[str, Any]:
+        """Save the confirmed scan: 54 sticker crops labelled with the cube's colours."""
+        if lighting not in LIGHTING_OPTIONS:
+            return {"ok": False, "error": "Pick the lighting for this scan first."}
+        with self._lock:
+            blocker = self._dataset_blocker()
+            if blocker is not None:
+                return {"ok": False, "error": blocker}
+            assert self._cube is not None and self._dataset is not None  # checked above
+            labels = {face: self._cube.face(face) for face in FACE_ORDER}
+            readings = {face: list(self._scanned[face]["stickers"]) for face in FACE_ORDER}
+            crops = {face: list(self._scan_crops[face]) for face in FACE_ORDER}
+            settings = self._settings.current
+            dataset = self._dataset
+
+        record = build_scan_record(
+            lighting=lighting,
+            labels=labels,
+            readings=readings,
+            profile=settings.active_profile,
+            camera={
+                "index": settings.camera_index,
+                "resolution": self.camera.status().get("resolution"),
+                "mirror": settings.mirror_camera,
+            },
+            detector={
+                "spacing": self.detector.spacing,
+                "sampleRadius": self.detector.sample_radius,
+                "cropSize": CROP_SIZE,
+            },
+        )
+        try:
+            scan_id = dataset.save(record, crops)
+        except OSError as exc:
+            self._logs.error(f"Could not save the scan to the dataset: {exc}", source="dataset")
+            return {"ok": False, "error": f"Could not save: {exc}"}
+
+        with self._lock:
+            self._dataset_saved = True
+        corrected = record["counts"]["corrected"]
+        self._logs.success(
+            f"Saved scan {scan_id} to the dataset: 54 stickers, {corrected} corrected",
+            source="dataset",
+        )
+        self._publish_event(
+            "dataset:saved", {"id": scan_id, "corrected": corrected, "stats": dataset.stats()}
+        )
+        self._broadcast_state()
+        return {"ok": True, "id": scan_id, "corrected": corrected}
 
     # ==================================================================
     # Calibration
@@ -981,6 +1084,7 @@ class SolveSession:
             "physicalSteps": (
                 expand_for_physical_turns(solution.moves) if solution else []
             ),
+            "dataset": self.dataset_state(),
             "timestamp": time.time(),
         }
 
@@ -1034,11 +1138,14 @@ class SolveSession:
             if face in FACE_ORDER:
                 self._face_index = FACE_ORDER.index(face)
                 self._scanned.pop(face, None)
+                self._scan_crops.pop(face, None)
                 self.detector.reset_stability()
                 self._broadcast_state()
             return {"ok": True}
         if command == "solve.run":
             return self.solve()
+        if command == "dataset.save":
+            return self.save_to_dataset(str(payload.get("lighting", "")))
         if command == "cube.scramble":
             return self.scramble(int(payload.get("length", 22)))
         if command == "cube.reset":
