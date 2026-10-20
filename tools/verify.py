@@ -173,6 +173,55 @@ def run_offline() -> None:
         overlay.draw_move(frame.copy(), Move("B"), turn_back=True)
         return "18 move arrows + scan HUD + turn-back hint drawn"
 
+    @check("dataset · a scanned cube is saved as 54 labelled sticker crops")
+    def _() -> str:
+        import json
+        import tempfile
+
+        from backend.config import SettingsStore
+        from backend.core.color import ProfileStore
+        from backend.core.cube import FACE_ORDER
+        from backend.core.solver import SolverEngine
+        from backend.services.analytics import AnalyticsStore
+        from backend.services.dataset import DatasetStore
+        from backend.services.logbus import LogBus
+        from backend.services.session import SolveSession
+
+        def face_frame(codes: List[str]) -> "np.ndarray":
+            frame = np.full((720, 960, 3), 28, np.uint8)
+            for index, code in enumerate(codes):
+                row, col = divmod(index, 3)
+                x, y = 480 + (col - 1) * 96, 360 + (row - 1) * 96
+                cv2.rectangle(frame, (x - 42, y - 42), (x + 42, y + 42), COLOR_BGR[code], -1)
+            return frame
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            session = SolveSession(
+                settings=SettingsStore(root / "settings.json"),
+                profiles=ProfileStore(root / "profiles.json"),
+                solver=SolverEngine(),
+                logs=LogBus(),
+                analytics=AnalyticsStore(root / "history.json"),
+                publish_event=lambda event, data: None,
+                publish_frame=lambda jpeg: None,
+                dataset=DatasetStore(root / "dataset"),
+            )
+            cube = CubeState.solved().apply_sequence(random_scramble(20, seed=5))
+            for face in FACE_ORDER:
+                session._process_frame(face_frame(cube.face(face)))  # real detector
+                assert session.capture_face(face)["ok"], f"capture of {face} failed"
+            result = session.save_to_dataset("daylight")
+            assert result["ok"], result.get("error")
+            folder = root / "dataset" / "scans" / result["id"]
+            record = json.loads((folder / "scan.json").read_text("utf-8"))
+            pngs = len(list(folder.glob("*.png")))
+            assert pngs == 54, f"{pngs} crops written"
+            wrong = [s["file"] for s in record["stickers"]
+                     if s["label"] != cube.face(s["face"])[s["index"]]]
+            assert not wrong, f"wrong labels: {wrong}"
+        return "6 synthetic faces scanned by the real detector -> 54 PNGs, all labels correct"
+
     # ------------------------------------------------------------------
     from backend.core.solver import solver_engine
 
