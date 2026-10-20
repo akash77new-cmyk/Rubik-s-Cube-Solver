@@ -7,7 +7,8 @@ Pipeline per frame::
       -> BGR2HSV
       -> 9 patch samples on a 3x3 grid
       -> robust per-patch HSV (circular median hue, median S/V)
-      -> ColorProfile.classify -> (colour, confidence)
+      -> ColorProfile.rank -> (colour, confidence, runner-up colours, uncertain?)
+      -> a 32x32 crop of each sticker from the raw frame (training data, Phase 2)
       -> temporal stability check  (N identical consecutive reads)
 
 Sampling a *patch* and taking the median - rather than the single centre pixel
@@ -26,8 +27,14 @@ from typing import Deque, Dict, List, Optional, Sequence, Tuple
 import cv2
 import numpy as np
 
-from backend.core.color import ColorProfile, HUE_MAX
+from backend.core.color import HUE_MAX, ColorProfile, ColorScore, uncertainty
 from backend.core.cube import COLOR_NAMES
+
+#: Side length, in pixels, of the sticker crops saved for the Phase 11 classifier.
+CROP_SIZE = 32
+#: Crop window width as a fraction of the grid spacing (the sticker pitch). 0.6 keeps
+#: the window inside the sticker, away from the black gaps around it.
+CROP_FRACTION = 0.6
 
 
 @dataclass
@@ -42,6 +49,10 @@ class StickerReading:
     hsv: Tuple[int, int, int]
     color: str
     confidence: float
+    #: The best three colours, best first (``alternatives[0]`` is ``color``).
+    alternatives: Tuple[ColorScore, ...] = ()
+    #: ``None``, or why the reading is doubtful (see ``backend.core.color``).
+    uncertain: Optional[str] = None
 
     def to_dict(self) -> Dict[str, object]:
         return {
@@ -54,6 +65,8 @@ class StickerReading:
             "color": self.color,
             "colorName": COLOR_NAMES.get(self.color, self.color),
             "confidence": self.confidence,
+            "alternatives": [score.to_dict() for score in self.alternatives],
+            "uncertain": self.uncertain,
         }
 
 
@@ -67,6 +80,9 @@ class DetectionResult:
     stable: bool = False
     stability: float = 0.0
     timestamp: float = field(default_factory=time.time)
+    #: One CROP_SIZE x CROP_SIZE BGR image per reading, in the same order.
+    #: Kept out of to_dict(): images are saved to disk, never broadcast.
+    crops: List[np.ndarray] = field(default_factory=list, repr=False)
 
     @property
     def colors(self) -> List[str]:
@@ -174,6 +190,7 @@ class FaceDetector:
         cx, cy = width // 2, height // 2 + self.offset_y
         radius = self.sample_radius
         readings: List[StickerReading] = []
+        crops: List[np.ndarray] = []
 
         for row in range(3):
             for col in range(3):
@@ -190,7 +207,8 @@ class FaceDetector:
                 s = float(np.median(flat[:, 1]))
                 v = float(np.median(flat[:, 2]))
 
-                color, confidence = self.profile.classify(h, s, v)
+                ranking = self.profile.rank(h, s, v)
+                best = ranking[0]
                 readings.append(
                     StickerReading(
                         index=row * 3 + col,
@@ -199,10 +217,15 @@ class FaceDetector:
                         x=x,
                         y=y,
                         hsv=(int(round(h)), int(round(s)), int(round(v))),
-                        color=color,
-                        confidence=confidence,
+                        color=best.code,
+                        confidence=best.confidence,
+                        alternatives=tuple(ranking[:3]),
+                        uncertain=uncertainty(ranking),
                     )
                 )
+                # Crop from the raw frame: the overlay is drawn later, and the
+                # classifier should learn from what the camera really saw.
+                crops.append(self._crop(frame_bgr, x, y))
 
         signature = tuple(r.color for r in readings)
         self._history.append(signature)
@@ -221,9 +244,20 @@ class FaceDetector:
             quad=quad,
             stable=stable,
             stability=stability,
+            crops=crops,
         )
 
     # ------------------------------------------------------------------
+    def _crop(self, frame_bgr: np.ndarray, x: int, y: int) -> np.ndarray:
+        """A CROP_SIZE x CROP_SIZE colour image of the sticker centred at (x, y)."""
+        half = max(self.sample_radius, int(self.spacing * CROP_FRACTION / 2))
+        height, width = frame_bgr.shape[:2]
+        x0, x1 = max(0, x - half), min(width, x + half + 1)
+        y0, y1 = max(0, y - half), min(height, y + half + 1)
+        return cv2.resize(
+            frame_bgr[y0:y1, x0:x1], (CROP_SIZE, CROP_SIZE), interpolation=cv2.INTER_AREA
+        )
+
     def _grid_bbox(self, cx: int, cy: int) -> Tuple[int, int, int, int]:
         half = int(self.spacing * 1.5)
         return (cx - half, cy - half, half * 2, half * 2)
