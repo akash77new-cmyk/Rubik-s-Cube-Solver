@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.config import DATA_DIR, ConfigError, read_runtime_config
+from backend.config import DATA_DIR, DATASET_DIR, ConfigError, read_runtime_config
 
 
 def test_data_dir_is_the_test_temp_folder():
@@ -56,3 +56,21 @@ def test_comma_separated_origins_become_a_list():
 def test_invalid_app_env_raises():
     with pytest.raises(ConfigError, match="APP_ENV"):
         read_runtime_config({"APP_ENV": "staging"})
+
+
+def test_dataset_collection_defaults_follow_app_env():
+    assert read_runtime_config({}).dataset_enabled is True
+    production = {"APP_ENV": "production", "FLASK_SECRET_KEY": "x"}
+    assert read_runtime_config(production).dataset_enabled is False
+
+
+def test_dataset_collection_can_be_set_explicitly():
+    assert read_runtime_config({"CUBE_DATASET_ENABLED": "0"}).dataset_enabled is False
+    production = {"APP_ENV": "production", "FLASK_SECRET_KEY": "x", "CUBE_DATASET_ENABLED": "yes"}
+    assert read_runtime_config(production).dataset_enabled is True
+    with pytest.raises(ConfigError):
+        read_runtime_config({"CUBE_DATASET_ENABLED": "maybe"})
+
+
+def test_dataset_dir_is_isolated_in_tests():
+    assert "cube-test-dataset-" in str(DATASET_DIR)

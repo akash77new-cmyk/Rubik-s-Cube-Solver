@@ -5,8 +5,9 @@ import numpy as np
 import pytest
 
 from backend.core.moves import Move
-from backend.vision.detector import FaceDetector
+from backend.vision.detector import CROP_SIZE, FaceDetector
 from backend.vision.overlay import COLOR_BGR, OverlayRenderer
+from tests.synthetic import synthetic_face
 
 WIDTH, HEIGHT, SPACING = 960, 720, 96
 
@@ -63,3 +64,32 @@ def test_turn_back_hint_renders(overlay_setup):
     frame, _, overlay = overlay_setup
     drawn = overlay.draw_move(frame.copy(), Move("B"), turn_back=True)
     assert not np.array_equal(drawn, frame), "no hint was drawn"
+
+
+def test_each_reading_has_a_crop_of_its_sticker():
+    codes = ["R", "G", "B", "W", "Y", "O", "G", "R", "B"]
+    result = FaceDetector(spacing=SPACING).detect(synthetic_face(codes))
+    assert len(result.crops) == len(result.readings) == 9
+    for code, crop in zip(codes, result.crops):
+        assert crop.shape == (CROP_SIZE, CROP_SIZE, 3) and crop.dtype == np.uint8
+        # The crop shows the sticker itself: its mean colour is the painted colour.
+        mean = crop.reshape(-1, 3).mean(axis=0)
+        assert np.abs(mean - np.array(COLOR_BGR[code])).max() < 3
+
+
+def test_crops_come_from_the_raw_frame_and_are_not_broadcast():
+    frame = synthetic_face(["W"] * 9)
+    result = FaceDetector(spacing=SPACING).detect(frame)
+    frame[:] = 0  # drawing on the frame afterwards (like the overlay) must not change crops
+    assert result.crops[0].mean() > 200
+    payload = result.to_dict()
+    assert "crops" not in payload
+
+
+def test_readings_carry_the_best_three_colours():
+    result = FaceDetector(spacing=SPACING).detect(synthetic_face(["B"] * 9))
+    reading = result.readings[0].to_dict()
+    assert [a["color"] for a in reading["alternatives"]][0] == "B"
+    assert len(reading["alternatives"]) == 3
+    assert reading["alternatives"][0]["confidence"] == reading["confidence"]
+    assert reading["uncertain"] is None
