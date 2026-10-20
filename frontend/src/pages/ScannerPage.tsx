@@ -3,6 +3,7 @@ import { Button, Card, ProgressBar, Segmented, Tag, EmptyState } from "@/compone
 import { CameraView, DetectionSummary } from "@/components/CameraView";
 import { CubeNet, FaceGrid } from "@/components/cube";
 import { DatasetCard, scanHints } from "@/components/dataset";
+import { ScanGuide } from "@/components/scanGuide";
 import { ValidationIssueList, flaggedStickers } from "@/components/validation";
 import { PageHead, type PageId } from "@/components/layout";
 import { ColorSummary } from "@/components/charts";
@@ -15,7 +16,7 @@ import {
   IconTarget,
 } from "@/components/Icons";
 import { useApp } from "@/state/AppStore";
-import { FACE_NAMES } from "@/lib/colors";
+import { COLOR_NAMES, FACE_NAMES } from "@/lib/colors";
 import { COLOR_CODES, FACE_ORDER, type ColorCode } from "@/lib/types";
 
 export default function ScannerPage({ navigate }: { navigate: (page: PageId) => void }) {
@@ -27,6 +28,8 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
   const scanned = scan?.count ?? 0;
   const complete = scanned === 6;
   const hints = scanHints(scan);
+  const steps = scan?.steps ?? [];
+  const nextStep = steps.find((step) => step.face === scan?.current) ?? null;
 
   const counts = COLOR_CODES.reduce(
     (accumulator, code) => {
@@ -45,7 +48,7 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
     <>
       <PageHead
         title="Scanning Pipeline"
-        description="Six faces, captured in U → R → F → D → L → B order. Auto-capture fires once a read is stable across consecutive frames."
+        description="Six sides, each recognised by its centre colour, so any order works. Each side is captured automatically once it's held still."
         actions={
           <>
             <Segmented
@@ -80,13 +83,10 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
                 ? validation?.ok
                   ? "All six faces captured and the cube state is valid."
                   : "All faces captured, but the state is not solvable — fix the highlighted colours."
-                : scan?.current
-                  ? `Show the ${FACE_NAMES[scan.current]} face to the camera.`
-                  : "Press Start scanning to begin."}
+                : snapshot?.mode === "scan"
+                  ? "Follow the guide below: each side is captured automatically."
+                  : "Press Start scanning, then follow the guide below."}
             </p>
-            {scan?.hint && !complete && (
-              <p style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{scan.hint}</p>
-            )}
           </div>
           {complete && (
             <Button
@@ -105,6 +105,13 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
         </div>
       </Card>
 
+      {/* Guide --------------------------------------------------------- */}
+      {!complete && (
+        <Card title="Scan guide" description="Show each side to the camera, as pictured">
+          <ScanGuide scan={scan} palette={settings?.cube_palette} />
+        </Card>
+      )}
+
       {/* Live + tiles -------------------------------------------------- */}
       <div className="split">
         <Card className="card-pad-0">
@@ -114,9 +121,10 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
               <>
                 <DetectionSummary />
                 <div className="viewport-badges" style={{ alignSelf: "flex-start" }}>
-                  {scan?.current && (
+                  {nextStep && (
                     <Tag tone="brand">
-                      <IconTarget size={12} /> {FACE_NAMES[scan.current]} face · {scan.current}
+                      <IconTarget size={12} /> Show {COLOR_NAMES[nextStep.center]} ·{" "}
+                      {COLOR_NAMES[nextStep.top].toLowerCase()} on top
                     </Tag>
                   )}
                   {detection?.stable && <Tag tone="good">ready to capture</Tag>}
@@ -162,14 +170,17 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
       {/* Face tiles ---------------------------------------------------- */}
       <Card title="Faces" description="Each tile fills in as its face is captured">
         <div className="scan-grid">
-          {FACE_ORDER.map((face) => {
+          {(steps.length ? steps.map((step) => step.face) : FACE_ORDER).map((face) => {
             const info = scan?.faces[face];
+            const center = steps.find((step) => step.face === face)?.center;
             const state = info?.captured ? "done" : scan?.current === face ? "active" : "idle";
             return (
               <div key={face} className="scan-tile" data-state={state}>
                 <div className="scan-tile-head">
-                  <b>{FACE_NAMES[face]}</b>
-                  <span style={{ color: "var(--ink-3)", fontSize: 12 }}>{face}</span>
+                  <b>{center ? COLOR_NAMES[center] : FACE_NAMES[face]}</b>
+                  <span style={{ color: "var(--ink-3)", fontSize: 12 }}>
+                    {FACE_NAMES[face]} · {face}
+                  </span>
                   {info?.captured ? (
                     <Tag tone="good">
                       <IconCheck size={11} /> {((info.confidence ?? 0) * 100).toFixed(0)}%

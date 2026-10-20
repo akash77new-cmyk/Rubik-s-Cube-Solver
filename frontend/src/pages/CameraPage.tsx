@@ -4,7 +4,7 @@ import { FaceGrid } from "@/components/cube";
 import { PageHead, type PageId } from "@/components/layout";
 import { IconPower, IconScan, IconTarget } from "@/components/Icons";
 import { useApp } from "@/state/AppStore";
-import { FACE_NAMES } from "@/lib/colors";
+import { COLOR_NAMES, FACE_NAMES } from "@/lib/colors";
 import { confidenceLabel, confidenceTone } from "@/lib/format";
 import { FACE_ORDER } from "@/lib/types";
 
@@ -16,6 +16,8 @@ export default function CameraPage({ navigate }: { navigate: (page: PageId) => v
   const running = Boolean(camera?.running);
 
   const currentFace = scan?.current ?? null;
+  const steps = scan?.steps ?? [];
+  const nextStep = steps.find((step) => step.face === currentFace) ?? null;
   const confidence = detection?.meanConfidence ?? 0;
 
   return (
@@ -53,9 +55,10 @@ export default function CameraPage({ navigate }: { navigate: (page: PageId) => v
               <>
                 <DetectionSummary />
                 <div className="viewport-badges" style={{ alignSelf: "flex-start" }}>
-                  {currentFace && (
+                  {nextStep && (
                     <Tag tone="brand">
-                      <IconTarget size={12} /> Show the {FACE_NAMES[currentFace]} face
+                      <IconTarget size={12} /> Show {COLOR_NAMES[nextStep.center]} ·{" "}
+                      {COLOR_NAMES[nextStep.top].toLowerCase()} on top
                     </Tag>
                   )}
                 </div>
@@ -115,6 +118,9 @@ export default function CameraPage({ navigate }: { navigate: (page: PageId) => v
                 </KeyValue>
               </div>
             </div>
+            {nextStep && (
+              <p style={{ fontSize: 12, color: "var(--ink-2)" }}>{nextStep.text}</p>
+            )}
             {scan?.hint && (
               <p style={{ fontSize: 12, color: "var(--ink-3)" }}>{scan.hint}</p>
             )}
@@ -160,10 +166,11 @@ export default function CameraPage({ navigate }: { navigate: (page: PageId) => v
           />
         </Card>
 
-        <Card title="Face order" description="The scanner walks these in order">
+        <Card title="Face order" description="Suggested order. Any order works: each side is recognised by its centre colour.">
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {FACE_ORDER.map((face) => {
+            {(steps.length ? steps.map((step) => step.face) : FACE_ORDER).map((face) => {
               const info = scan?.faces[face];
+              const center = steps.find((step) => step.face === face)?.center;
               return (
                 <button
                   key={face}
@@ -174,7 +181,7 @@ export default function CameraPage({ navigate }: { navigate: (page: PageId) => v
                   title={`Re-scan the ${FACE_NAMES[face]} face`}
                 >
                   <b>{face}</b>
-                  <span>{FACE_NAMES[face]}</span>
+                  <span>{center ? `${COLOR_NAMES[center]} · ${FACE_NAMES[face]}` : FACE_NAMES[face]}</span>
                   {info?.captured ? (
                     <Tag tone="good">{((info.confidence ?? 0) * 100).toFixed(0)}%</Tag>
                   ) : (

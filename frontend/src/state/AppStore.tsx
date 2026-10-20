@@ -136,6 +136,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             },
       ),
     );
+    socket.on("scan:repaired", (data: { message: string }) =>
+      pushToast({ tone: "brand", title: "Scan orientation fixed", message: data.message }),
+    );
     socket.on("solve:complete", (data: SolutionInfo) =>
       pushToast({
         tone: "brand",

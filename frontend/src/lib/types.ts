@@ -157,6 +157,18 @@ export interface ScanFaceInfo {
   stickers?: StickerReading[];
 }
 
+/** One step of the scan guide (backend/core/scanning.py). */
+export interface ScanStepInfo {
+  face: FaceKey;
+  /** Centre colour that must face the camera. */
+  center: ColorCode;
+  /** Colour that must be on top. */
+  top: ColorCode;
+  text: string;
+  how: string;
+  done: boolean;
+}
+
 export interface ScanInfo {
   order: FaceKey[];
   faces: Record<FaceKey, ScanFaceInfo>;
@@ -164,6 +176,8 @@ export interface ScanInfo {
   hint: string;
   count: number;
   autoCapture: boolean;
+  /** The guide, in its suggested order. */
+  steps: ScanStepInfo[];
 }
 
 export interface HsvRange {
