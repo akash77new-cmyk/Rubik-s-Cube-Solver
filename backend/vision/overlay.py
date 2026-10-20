@@ -213,14 +213,16 @@ class OverlayRenderer:
         face: Optional[str],
         scanned: Sequence[str],
         result: Optional[DetectionResult] = None,
+        title: Optional[str] = None,
     ) -> np.ndarray:
         height, width = frame.shape[:2]
         draw_glass_panel(frame, (16, 14, width - 32, 62), alpha=0.6, radius=16, border=(70, 60, 55))
 
-        if face:
-            title = f"Show the {FACE_NAMES.get(face, face)} face  ({face})"
-        else:
-            title = "All faces captured"
+        if title is None:
+            if face:
+                title = f"Show the {FACE_NAMES.get(face, face)} face  ({face})"
+            else:
+                title = "All faces captured"
         draw_text(frame, title, (32, 44), 0.72, INK, 2)
 
         progress = f"{len(scanned)}/6 faces"

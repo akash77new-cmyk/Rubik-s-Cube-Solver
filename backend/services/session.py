@@ -17,7 +17,7 @@ from __future__ import annotations
 import threading
 import time
 import uuid
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import cv2
 import numpy as np
@@ -27,12 +27,24 @@ from backend.core.color import ColorProfile, ProfileStore
 from backend.core.cube import (
     COLOR_CODES,
     COLOR_NAMES,
+    DEFAULT_SCHEME,
     FACE_ORDER,
     CubeState,
     InvalidCubeError,
     random_scramble,
 )
 from backend.core.moves import FACE_NAMES, Move, expand_for_physical_turns, parse_sequence
+from backend.core.scanning import (
+    IDENTITY_MAP,
+    MIRROR_MAP,
+    SCAN_ORDER,
+    SCAN_STEPS,
+    STEP_BY_FACE,
+    banner_title,
+    face_for_center,
+    reorder,
+    repair_orientation,
+)
 from backend.core.solver import (
     SolveFailedError,
     SolverEngine,
@@ -48,16 +60,6 @@ from backend.vision.overlay import OverlayRenderer, encode_jpeg
 
 PublishEvent = Callable[[str, Any], None]
 PublishFrame = Callable[[bytes], None]
-
-#: Scan order and the framing hint shown for each face.
-SCAN_HINTS: Dict[str, str] = {
-    "U": "Hold green towards you, tilt the cube so the top face points at the camera.",
-    "R": "Keep green towards you, turn the cube left so the right face is visible.",
-    "F": "Green face towards the camera, white on top.",
-    "D": "Tilt the cube forward so the bottom face points at the camera.",
-    "L": "Turn the cube right so the left face is visible.",
-    "B": "Rotate the cube 180 degrees to show the back face.",
-}
 
 
 class SolveSession:
@@ -123,6 +125,8 @@ class SolveSession:
         self._solve_error: Optional[str] = None
         self._solving = False
         self._latest_detection: Optional[DetectionResult] = None
+        #: True if the latest frame was mirrored (a selfie-style camera preview).
+        self._latest_mirrored = False
 
         self._playback = {"index": 0, "playing": False, "completed": False}
         self._playback_thread: Optional[threading.Thread] = None
@@ -182,12 +186,18 @@ class SolveSession:
                 continue
 
             try:
-                self._process_frame(frame)
+                self._process_frame(frame, mirrored=self.camera.mirror)
             except Exception as exc:  # never let one bad frame kill the loop
                 self._logs.error(f"Frame processing failed: {exc}", source="camera")
                 time.sleep(0.05)
 
-    def _process_frame(self, frame: np.ndarray) -> None:
+    def _process_frame(self, frame: np.ndarray, mirrored: bool = False) -> None:
+        """Detect, auto-capture, draw and publish one frame.
+
+        ``mirrored`` says the frame was flipped left-right for display. Detection runs
+        on the frame as shown (so the overlay lines up), and capture_face() undoes the
+        flip, so each face is stored the way the camera really sees it.
+        """
         settings = self._settings.current
         now = time.time()
 
@@ -205,6 +215,7 @@ class SolveSession:
         result = self.detector.detect(frame)
         with self._lock:
             self._latest_detection = result
+            self._latest_mirrored = mirrored
         self._analytics.note_detection_confidence(result.mean_confidence)
 
         self._maybe_auto_capture(result, settings)
@@ -248,7 +259,11 @@ class SolveSession:
             )
             if self._mode == "scan":
                 self.overlay.draw_scan_banner(
-                    frame, self.current_face, list(self._scanned), result
+                    frame,
+                    self.current_face,
+                    list(self._scanned),
+                    result,
+                    title=banner_title(self.current_face),
                 )
 
         self.overlay.draw_hud(frame, self.camera.fps, self._mode)
@@ -358,55 +373,94 @@ class SolveSession:
     # ==================================================================
     @property
     def current_face(self) -> Optional[str]:
-        remaining = [face for face in FACE_ORDER if face not in self._scanned]
+        """The face the guide asks for next: the face picked for a re-scan, if any,
+        otherwise the first face in guide order that hasn't been captured."""
+        remaining = [face for face in SCAN_ORDER if face not in self._scanned]
         if not remaining:
             return None
-        preferred = FACE_ORDER[self._face_index % len(FACE_ORDER)]
+        preferred = SCAN_ORDER[self._face_index % len(SCAN_ORDER)]
         return preferred if preferred in remaining else remaining[0]
 
     def _maybe_auto_capture(self, result: DetectionResult, settings: Settings) -> None:
         if self._mode != "scan" or not self._auto_capture:
             return
-        if not result.stable or result.min_confidence < settings.min_confidence:
+        if not result.stable or len(result.readings) != 9:
             return
-        face = self.current_face
-        if face:
+        # The centre is left out of the confidence check: it often carries a logo.
+        outer = [reading.confidence for reading in result.readings if reading.index != 4]
+        if min(outer) < settings.min_confidence:
+            return
+        # Each face is recognised by its centre colour (centres never move). A face
+        # still in front of the camera after its capture is simply ignored.
+        face = face_for_center(result.readings[4].color)
+        if face is not None and face not in self._scanned:
             self.capture_face(face, auto=True)
+
+    def _face_to_capture(self, result: Optional[DetectionResult]) -> Optional[str]:
+        """The face whose centre is visible, if it still needs scanning, else the
+        guide's next face (e.g. when a logo hides the centre colour)."""
+        if result is not None and len(result.readings) == 9:
+            by_center = face_for_center(result.readings[4].color)
+            if by_center is not None and by_center not in self._scanned:
+                return by_center
+        return self.current_face
+
+    def start_scan(self, open_camera: bool = True) -> Dict[str, Any]:
+        """Enter scan mode. ``open_camera=False`` lets tests feed frames themselves."""
+        with self._lock:
+            self._mode = "scan"
+            self._scan_started_at = time.time()
+        self.detector.reset_stability()
+        if open_camera and not self.camera.is_running:
+            self.start_camera()
+        self._logs.info("Scanning started", source="scan")
+        self._broadcast_state()
+        return {"ok": True}
 
     def capture_face(self, face: Optional[str] = None, auto: bool = False) -> Dict[str, Any]:
         with self._lock:
             result = self._latest_detection
-            target = face or self.current_face
+            target = face or self._face_to_capture(result)
             if target is None:
                 return {"ok": False, "error": "All six faces are already captured"}
             if result is None or len(result.readings) != 9:
                 return {"ok": False, "error": "No detection available yet"}
 
+            # Undo a mirrored preview, so the face is stored as the camera sees it.
+            index_map = MIRROR_MAP if self._latest_mirrored else IDENTITY_MAP
+            colors = reorder(result.colors, index_map)
+            colors[4] = DEFAULT_SCHEME[target]  # a face's centre colour is its identity
+            stickers = []
+            for position, reading in enumerate(reorder(result.readings, index_map)):
+                sticker = reading.to_dict()
+                sticker.update(index=position, row=position // 3, col=position % 3)
+                stickers.append(sticker)
+
             self._scanned[target] = {
                 # "colors" is the face's current colours: corrections update it.
-                "colors": result.colors,
+                "colors": colors,
                 "confidence": result.mean_confidence,
                 "minConfidence": result.min_confidence,
                 "timestamp": time.time(),
                 "auto": auto,
                 # What the detector saw, per sticker: colour, confidence, the best
                 # three colours and whether it was unsure. Never changed afterwards.
-                "stickers": [reading.to_dict() for reading in result.readings],
+                "stickers": stickers,
             }
-            self._scan_crops[target] = list(result.crops)
-            self._face_index = min(self._face_index + 1, len(FACE_ORDER))
+            self._scan_crops[target] = reorder(result.crops, index_map)
+            self._face_index = 0  # back to "first face not yet captured"
             self.detector.reset_stability()
 
         self._logs.success(
-            f"Face {target} captured ({'auto' if auto else 'manual'}) - "
-            f"{''.join(result.colors)} @ {result.mean_confidence:.2f}",
+            f"{COLOR_NAMES[DEFAULT_SCHEME[target]]} face ({target}) captured "
+            f"({'auto' if auto else 'manual'}) - {''.join(colors)} @ {result.mean_confidence:.2f}",
             source="scan",
         )
         self._publish_event(
             "scan:face",
             {
                 "face": target,
-                "colors": result.colors,
+                "colors": colors,
                 "confidence": result.mean_confidence,
                 "scanned": list(self._scanned),
                 "auto": auto,
@@ -416,7 +470,7 @@ class SolveSession:
         if len(self._scanned) == 6:
             self._finish_scan()
         self._broadcast_state()
-        return {"ok": True, "face": target, "colors": result.colors}
+        return {"ok": True, "face": target, "colors": colors}
 
     def _finish_scan(self) -> None:
         try:
@@ -426,6 +480,18 @@ class SolveSession:
             return
 
         validation = cube.validate()
+        if not validation.ok:
+            fix = repair_orientation({f: self._scanned[f]["colors"] for f in FACE_ORDER})
+            if fix is not None:
+                with self._lock:
+                    for face in FACE_ORDER:
+                        index_map = fix.index_map(face)
+                        if index_map != IDENTITY_MAP:
+                            self._reorient_face(face, index_map)
+                    cube = CubeState({f: self._scanned[f]["colors"] for f in FACE_ORDER})
+                validation = cube.validate()
+                self._logs.success(fix.describe(), source="scan")
+                self._publish_event("scan:repaired", {"message": fix.describe()})
         with self._lock:
             self._cube = cube
             self._cube_source = "scan"
@@ -443,6 +509,19 @@ class SolveSession:
             "scan:complete",
             {"validation": validation.to_dict(), "cube": cube.to_dict()},
         )
+
+    def _reorient_face(self, face: str, index_map: Sequence[int]) -> None:
+        """Re-order one captured face's colours, readings and crops together, so the
+        labels and images saved to the dataset stay matched (caller holds the lock)."""
+        entry = self._scanned[face]
+        entry["colors"] = reorder(entry["colors"], index_map)
+        stickers = reorder(entry.get("stickers", []), index_map) if entry.get("stickers") else []
+        for position, sticker in enumerate(stickers):
+            sticker.update(index=position, row=position // 3, col=position % 3)
+        if stickers:
+            entry["stickers"] = stickers
+        if face in self._scan_crops:
+            self._scan_crops[face] = reorder(self._scan_crops[face], index_map)
 
     def reset_scan(self) -> None:
         with self._lock:
@@ -1054,7 +1133,18 @@ class SolveSession:
                 for face in FACE_ORDER
             },
             "current": self.current_face,
-            "hint": SCAN_HINTS.get(self.current_face or "", ""),
+            "hint": STEP_BY_FACE[self.current_face].how if self.current_face else "",
+            "steps": [
+                {
+                    "face": step.face,
+                    "center": step.center,
+                    "top": step.top,
+                    "text": step.text,
+                    "how": step.how,
+                    "done": step.face in self._scanned,
+                }
+                for step in SCAN_STEPS
+            ],
             "count": len(self._scanned),
             "autoCapture": self._auto_capture,
         }
@@ -1115,15 +1205,7 @@ class SolveSession:
         if command == "camera.list":
             return {"ok": True, "cameras": list_cameras()}
         if command == "scan.start":
-            with self._lock:
-                self._mode = "scan"
-                self._scan_started_at = time.time()
-            self.detector.reset_stability()
-            if not self.camera.is_running:
-                self.start_camera()
-            self._logs.info("Scanning started", source="scan")
-            self._broadcast_state()
-            return {"ok": True}
+            return self.start_scan()
         if command == "scan.capture":
             return self.capture_face(payload.get("face"))
         if command == "scan.reset":
@@ -1136,9 +1218,11 @@ class SolveSession:
         if command == "scan.face":
             face = str(payload.get("face", "U")).upper()
             if face in FACE_ORDER:
-                self._face_index = FACE_ORDER.index(face)
-                self._scanned.pop(face, None)
-                self._scan_crops.pop(face, None)
+                with self._lock:
+                    self._face_index = SCAN_ORDER.index(face)
+                    self._scanned.pop(face, None)
+                    self._scan_crops.pop(face, None)
+                    self._mode = "scan"  # so the re-scanned face is captured automatically
                 self.detector.reset_stability()
                 self._broadcast_state()
             return {"ok": True}
