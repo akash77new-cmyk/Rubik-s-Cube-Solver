@@ -85,6 +85,26 @@ def run_offline() -> None:
         assert not CubeState(facelets).validate().ok, "invalid cube passed validation"
         return "colour-count violation detected"
 
+    @check("cube validation · twist, flip and parity are caught")
+    def _() -> str:
+        from backend.core.cube import DEFAULT_SCHEME
+        from backend.core.cubie import CubieCube
+
+        def cube_from(cubie: CubieCube) -> CubeState:
+            letters = cubie.to_facelet_string()
+            return CubeState.from_color_string("".join(DEFAULT_SCHEME[f] for f in letters))
+
+        solved = CubieCube.solved()
+        cases = {
+            "corner_twist": CubieCube(solved.cp, (1,) + (0,) * 7, solved.ep, solved.eo),
+            "edge_flip": CubieCube(solved.cp, solved.co, solved.ep, (1,) + (0,) * 11),
+            "parity": CubieCube(solved.cp, solved.co, (1, 0) + tuple(range(2, 12)), solved.eo),
+        }
+        for code, cubie in cases.items():
+            codes = cube_from(cubie).validate().codes()
+            assert codes == [code], f"{code}: got {codes}"
+        return "a twisted corner, a flipped edge and a two-piece swap are each rejected"
+
     @check("move notation · physical expansion of back-face turns")
     def _() -> str:
         cases = {
