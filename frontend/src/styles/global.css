@@ -1642,3 +1642,12 @@ select { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .net-face .sticker[data-flagged="true"] { animation: none; }
 }
+
+/* ---- Uncertain stickers + dataset (Phase 2) ---------------------------- */
+/* Validation problems (data-flagged) win over uncertainty when both apply. */
+.net-face .sticker[data-uncertain="true"]:not([data-flagged="true"]) {
+  outline: 2px dashed var(--status-warning);
+  outline-offset: 1px;
+  z-index: 1;
+}
+.dataset-stats { display: flex; flex-wrap: wrap; gap: 6px; }

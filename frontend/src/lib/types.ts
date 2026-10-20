@@ -49,6 +49,16 @@ export interface ValidationInfo {
   issues: ValidationIssue[];
 }
 
+/** One colour's fit for a sticker (see ColorProfile.rank in backend/core/color.py). */
+export interface ColorScoreInfo {
+  color: ColorCode;
+  confidence: number;
+  inRange: boolean;
+}
+
+/** Why a reading is doubtful: outside every colour range, or inside two. */
+export type UncertainReason = "no_range" | "two_ranges";
+
 export interface StickerReading {
   index: number;
   row: number;
@@ -59,6 +69,9 @@ export interface StickerReading {
   color: ColorCode;
   colorName: string;
   confidence: number;
+  /** Best three colours, best first. */
+  alternatives: ColorScoreInfo[];
+  uncertain: UncertainReason | null;
 }
 
 export interface DetectionInfo {
@@ -140,6 +153,8 @@ export interface ScanFaceInfo {
   minConfidence?: number;
   timestamp?: number;
   auto?: boolean;
+  /** What the camera saw for each sticker (camera scans only; absent for scrambles). */
+  stickers?: StickerReading[];
 }
 
 export interface ScanInfo {
@@ -282,5 +297,26 @@ export interface Snapshot {
   calibration: CalibrationInfo;
   detection: DetectionInfo | null;
   physicalSteps: string[];
+  dataset: DatasetInfo;
   timestamp: number;
+}
+
+export interface DatasetStats {
+  scans: number;
+  stickers: number;
+  corrected: number;
+  uncertain: number;
+  byLighting: Record<string, number>;
+  byColor: Record<ColorCode, number>;
+  lastScanId: string | null;
+}
+
+/** Training-data collection for the Phase 11 classifier (backend/services/dataset.py). */
+export interface DatasetInfo {
+  enabled: boolean;
+  canSave: boolean;
+  reason: string | null;
+  saved: boolean;
+  lightingOptions: { value: string; label: string }[];
+  stats: DatasetStats | null;
 }

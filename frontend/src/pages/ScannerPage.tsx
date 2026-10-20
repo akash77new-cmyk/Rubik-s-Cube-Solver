@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button, Card, ProgressBar, Segmented, Tag, EmptyState } from "@/components/ui";
 import { CameraView, DetectionSummary } from "@/components/CameraView";
 import { CubeNet, FaceGrid } from "@/components/cube";
+import { DatasetCard, scanHints } from "@/components/dataset";
 import { ValidationIssueList, flaggedStickers } from "@/components/validation";
 import { PageHead, type PageId } from "@/components/layout";
 import { ColorSummary } from "@/components/charts";
@@ -25,6 +26,7 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
   const validation = snapshot?.validation;
   const scanned = scan?.count ?? 0;
   const complete = scanned === 6;
+  const hints = scanHints(scan);
 
   const counts = COLOR_CODES.reduce(
     (accumulator, code) => {
@@ -210,7 +212,16 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
             activeFace={scan?.current ?? null}
             palette={settings?.cube_palette}
             flagged={complete && validation && !validation.ok ? flaggedStickers(validation.issues, selectedIssue) : undefined}
+            uncertain={hints.uncertain}
+            notes={hints.notes}
           />
+          {Object.keys(hints.notes).length > 0 && (
+            <p style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 8 }}>
+              {hints.uncertain.size > 0 &&
+                "Dashed amber outline: the camera was unsure about this sticker (outside every colour range, or inside two). Check it against your cube. "}
+              Hover a sticker to see what the camera saw.
+            </p>
+          )}
         </Card>
 
         <Card title="Validation" description="Checks run before the solver is allowed to start">
@@ -252,6 +263,8 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
           )}
         </Card>
       </div>
+
+      <DatasetCard />
     </>
   );
 }

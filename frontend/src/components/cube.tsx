@@ -391,6 +391,8 @@ export function CubeNet({
   onStickerClick,
   palette,
   flagged,
+  uncertain,
+  notes,
 }: {
   facelets: Partial<Facelets> | null;
   capturedFaces?: Partial<Record<FaceKey, boolean>>;
@@ -402,6 +404,10 @@ export function CubeNet({
   palette?: Partial<Record<ColorCode, string>>;
   /** Sticker keys like "U8" (face + 0-based index) to outline as problems. */
   flagged?: ReadonlySet<string>;
+  /** Sticker keys like "U8" the camera was unsure about (dashed outline). */
+  uncertain?: ReadonlySet<string>;
+  /** Extra tooltip text per sticker key, e.g. what the camera saw. */
+  notes?: Readonly<Record<string, string>>;
 }) {
   const previous = useRef<string>("");
   const signature = JSON.stringify(facelets ?? {});
@@ -438,8 +444,11 @@ export function CubeNet({
                   data-editable={editable}
                   data-changed={changed && Boolean(code)}
                   data-flagged={flagged?.has(`${face}${index}`) ?? false}
+                  data-uncertain={uncertain?.has(`${face}${index}`) ?? false}
                   style={{ "--c": stickerColor(code, palette) } as never}
-                  title={`${FACE_NAMES[face]} ${index + 1}${code ? ` · ${code}` : ""}`}
+                  title={`${FACE_NAMES[face]} ${index + 1}${code ? ` · ${code}` : ""}${
+                    notes?.[`${face}${index}`] ? ` · ${notes[`${face}${index}`]}` : ""
+                  }`}
                   onClick={
                     editable && onStickerClick
                       ? () => onStickerClick(face, index)

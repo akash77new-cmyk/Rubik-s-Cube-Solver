@@ -149,6 +149,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     socket.on("solve:finished", () =>
       pushToast({ tone: "good", title: "Cube solved", message: "Nice work" }),
     );
+    socket.on("dataset:saved", (data: { id: string; corrected: number }) =>
+      pushToast({
+        tone: "good",
+        title: "Scan saved to the dataset",
+        message: `54 stickers · ${data.corrected} corrected`,
+      }),
+    );
     socket.on("engine:disconnected", () =>
       pushToast({ tone: "warning", title: "Vision engine disconnected" }),
     );
