@@ -1,14 +1,13 @@
-"""Application paths, environment configuration and persisted user settings.
+"""Application paths, environment configuration and the user settings model.
 
-Settings live in ``<project>/data/settings.json`` so that a fresh checkout works
-with sane defaults and never requires editing source to change a camera index.
+Settings are stored in the database (``backend/services/settings.py``). A fresh
+checkout works with sane defaults and never requires editing source to change a
+camera index.
 """
 
 from __future__ import annotations
 
-import json
 import os
-import threading
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Union
@@ -33,10 +32,6 @@ SOLVER_TABLE_DIR = CACHE_DIR / "twophase"
 DOCS_DIR = PROJECT_ROOT / "docs"
 #: Training data for the Phase 11 colour classifier (committed to git; see ml/data/README.md).
 DATASET_DIR = Path(os.environ.get("CUBE_DATASET_DIR") or PROJECT_ROOT / "ml" / "data")
-
-SETTINGS_FILE = DATA_DIR / "settings.json"
-PROFILES_FILE = DATA_DIR / "hsv_profiles.json"
-HISTORY_FILE = DATA_DIR / "solve_history.json"
 
 #: Local development database (used when DATABASE_URL is not set).
 DEFAULT_SQLITE_FILE = DATA_DIR / "cube.db"
@@ -219,57 +214,3 @@ class Settings:
         known = {f.name for f in fields(cls)}
         clean = {k: v for k, v in (payload or {}).items() if k in known}
         return cls(**clean)
-
-
-class SettingsStore:
-    """Thread-safe JSON-backed settings store."""
-
-    def __init__(self, path: Path = SETTINGS_FILE) -> None:
-        self._path = path
-        self._lock = threading.RLock()
-        self._settings = self._read()
-
-    # ------------------------------------------------------------------
-    def _read(self) -> Settings:
-        if self._path.exists():
-            try:
-                return Settings.from_dict(json.loads(self._path.read_text("utf-8")))
-            except (json.JSONDecodeError, OSError, TypeError):
-                pass  # corrupt file -> fall back to defaults rather than crashing
-        return Settings()
-
-    def _write(self) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps(self._settings.to_dict(), indent=2), encoding="utf-8"
-        )
-
-    # ------------------------------------------------------------------
-    @property
-    def current(self) -> Settings:
-        with self._lock:
-            return self._settings
-
-    def get(self) -> Dict[str, Any]:
-        with self._lock:
-            return self._settings.to_dict()
-
-    def update(self, patch: Dict[str, Any]) -> Dict[str, Any]:
-        """Merge ``patch`` into the current settings and persist."""
-        with self._lock:
-            merged = self._settings.to_dict()
-            for key, value in (patch or {}).items():
-                if key in merged:
-                    merged[key] = value
-            self._settings = Settings.from_dict(merged)
-            self._write()
-            return self._settings.to_dict()
-
-    def reset(self) -> Dict[str, Any]:
-        with self._lock:
-            self._settings = Settings()
-            self._write()
-            return self._settings.to_dict()
-
-
-settings_store = SettingsStore()

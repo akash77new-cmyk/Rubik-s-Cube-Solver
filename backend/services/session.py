@@ -22,8 +22,8 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 import cv2
 import numpy as np
 
-from backend.config import Settings, SettingsStore
-from backend.core.color import ColorProfile, ProfileStore
+from backend.config import Settings
+from backend.core.color import ColorProfile
 from backend.core.cube import (
     COLOR_CODES,
     COLOR_NAMES,
@@ -51,9 +51,12 @@ from backend.core.solver import (
     SolverUnavailableError,
     Solution,
 )
+from backend.db.database import Database, StorageError
 from backend.services.analytics import AnalyticsStore, SolveRecord
 from backend.services.dataset import LIGHTING_OPTIONS, DatasetStore, build_scan_record
 from backend.services.logbus import LogBus
+from backend.services.profiles import ProfileStore
+from backend.services.settings import SettingsStore
 from backend.vision.camera import CameraStream, list_cameras
 from backend.vision.detector import CROP_SIZE, DetectionResult, FaceDetector
 from backend.vision.overlay import OverlayRenderer, encode_jpeg
@@ -81,6 +84,7 @@ class SolveSession:
         publish_event: PublishEvent,
         publish_frame: PublishFrame,
         dataset: Optional[DatasetStore] = None,
+        database: Optional[Database] = None,
     ) -> None:
         self._settings = settings
         self._profiles = profiles
@@ -91,6 +95,9 @@ class SolveSession:
         self._publish_frame = publish_frame
         #: None when dataset collection is off (production).
         self._dataset = dataset
+        #: Only used for its status (Settings page) and the "Check connection" button;
+        #: the stores above do all the reading and writing.
+        self._database = database
 
         config = settings.current
         self.camera = CameraStream(
@@ -782,7 +789,10 @@ class SolveSession:
             source=self._cube_source,
         )
         self._solve_id = None
-        self._analytics.record(record)
+        try:
+            self._analytics.record(record)
+        except StorageError as exc:  # the cube is still solved; only the history entry is lost
+            self._report_storage_error(exc)
         with self._lock:
             self._mode = "complete"
         self._logs.success(
@@ -1238,6 +1248,7 @@ class SolveSession:
                 expand_for_physical_turns(solution.moves) if solution else []
             ),
             "dataset": self.dataset_state(),
+            "database": self._database.status() if self._database is not None else None,
             "timestamp": time.time(),
         }
 
@@ -1252,9 +1263,18 @@ class SolveSession:
         payload = payload or {}
         try:
             return self._dispatch(command, payload)
+        except StorageError as exc:
+            self._report_storage_error(exc)
+            return {"ok": False, "error": str(exc)}
         except Exception as exc:
             self._logs.error(f"Command '{command}' failed: {exc}", source="app")
             return {"ok": False, "error": str(exc)}
+
+    def _report_storage_error(self, exc: StorageError) -> None:
+        """Say clearly that something was not saved: log, toast, and the Storage card."""
+        self._logs.error(str(exc), source="database")
+        self._publish_event("storage:error", {"message": str(exc)})
+        self._broadcast_state()
 
     def _dispatch(self, command: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if command == "sync":
@@ -1324,4 +1344,14 @@ class SolveSession:
         if command == "solver.warmup":
             self._solver.warm_up_async()
             return {"ok": True}
+        if command == "database.check":
+            if self._database is None:
+                return {"ok": False, "error": "No database is connected"}
+            status = self._database.check()
+            if status["connected"]:
+                self._logs.success("Database connection OK", source="database")
+            else:
+                self._logs.error(f"Database not reachable: {status['error']}", source="database")
+            self._broadcast_state()
+            return {"ok": bool(status["connected"]), "database": status}
         return {"ok": False, "error": f"Unknown command: {command}"}

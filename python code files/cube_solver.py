@@ -26,12 +26,13 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import cv2
 
-from backend.config import settings_store
-from backend.core.color import profile_store
 from backend.core.cube import FACE_ORDER, CubeState, InvalidCubeError
 from backend.core.moves import FACE_NAMES, expand_for_physical_turns
 from backend.core.solver import SolveFailedError, solver_engine
+from backend.db import connect
 from backend.ipc.client import EngineClient
+from backend.services.profiles import ProfileStore
+from backend.services.settings import SettingsStore
 from backend.vision.camera import CameraStream
 from backend.vision.detector import FaceDetector
 from backend.vision.overlay import OverlayRenderer
@@ -46,7 +47,9 @@ def _print_face(face: str, colors: list[str]) -> None:
 
 
 def main() -> int:
-    settings = settings_store.current
+    database = connect()  # the same database (and settings) as the web app
+    settings = SettingsStore(database).current
+    profile_store = ProfileStore(database)
     camera = CameraStream(
         index=settings.camera_index,
         width=settings.frame_width,

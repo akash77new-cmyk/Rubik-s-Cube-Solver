@@ -28,9 +28,11 @@ if str(PROJECT_ROOT) not in sys.path:
 import cv2
 import numpy as np
 
-from backend.config import settings_store
-from backend.core.color import DEFAULT_RANGES, ColorProfile, profile_store
+from backend.core.color import DEFAULT_RANGES, ColorProfile
 from backend.core.cube import COLOR_CODES, COLOR_NAMES
+from backend.db import connect
+from backend.services.profiles import ProfileStore
+from backend.services.settings import SettingsStore
 from backend.vision.overlay import COLOR_BGR, draw_glass_panel, draw_text
 
 TRACKBARS = "HSV Controls"
@@ -79,6 +81,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--camera", type=int, default=None)
     args = parser.parse_args(argv)
 
+    database = connect()  # the same database (and profiles) as the web app
+    settings_store = SettingsStore(database)
+    profile_store = ProfileStore(database)
     settings = settings_store.current
     base = args.base or settings.active_profile
     profile = ColorProfile.from_dict(profile_store.get(base).to_dict())

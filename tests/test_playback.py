@@ -6,14 +6,12 @@ A known 3-move solution is set up directly, so these tests don't run the solver.
 import numpy as np
 import pytest
 
-from backend.config import SettingsStore
-from backend.core.color import ProfileStore
 from backend.core.cube import CubeState
 from backend.core.moves import invert_sequence, parse_sequence
 from backend.core.solver import Solution, SolverEngine
-from backend.services.analytics import AnalyticsStore
 from backend.services.logbus import LogBus
 from backend.services.session import SolveSession
+from tests.storage import memory_stores
 
 SCRAMBLE = parse_sequence("R U F")  # so the solution is F' U' R'
 
@@ -21,11 +19,9 @@ SCRAMBLE = parse_sequence("R U F")  # so the solution is F' U' R'
 @pytest.fixture
 def session(tmp_path):
     s = SolveSession(
-        settings=SettingsStore(tmp_path / "settings.json"),
-        profiles=ProfileStore(tmp_path / "profiles.json"),
+        **memory_stores(),
         solver=SolverEngine(),
         logs=LogBus(),
-        analytics=AnalyticsStore(tmp_path / "history.json"),
         publish_event=lambda event, data: None,
         publish_frame=lambda jpeg: None,
     )

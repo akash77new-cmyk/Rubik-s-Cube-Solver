@@ -20,15 +20,11 @@ a doubtful sticker - e.g. "red 0.62, orange 0.58" - not just the winner.
 
 from __future__ import annotations
 
-import json
 import math
-import threading
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from backend.config import PROFILES_FILE
-from backend.core.cube import COLOR_CODES, COLOR_NAMES
+from backend.core.cube import COLOR_CODES
 
 HUE_MAX = 179
 SAT_MAX = 255
@@ -312,83 +308,8 @@ class ColorProfile:
         return rng
 
 
-# --------------------------------------------------------------------------------------
-# Persistence
-# --------------------------------------------------------------------------------------
-
-
-class ProfileStore:
-    """JSON-backed store of user-saved HSV profiles."""
-
-    def __init__(self, path: Path = PROFILES_FILE) -> None:
-        self._path = path
-        self._lock = threading.RLock()
-        self._profiles: Dict[str, ColorProfile] = {}
-        self._load()
-
-    def _load(self) -> None:
-        for key in BUILTIN_PRESETS:
-            self._profiles[key] = ColorProfile.preset(key)
-        if self._path.exists():
-            try:
-                payload = json.loads(self._path.read_text("utf-8"))
-                for item in payload.get("profiles", []):
-                    profile = ColorProfile.from_dict(item)
-                    if not profile.builtin:
-                        self._profiles[profile.name] = profile
-            except (json.JSONDecodeError, OSError, TypeError, KeyError):
-                pass
-
-    def _save(self) -> None:
-        custom = [p.to_dict() for p in self._profiles.values() if not p.builtin]
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps({"profiles": custom}, indent=2), encoding="utf-8"
-        )
-
-    # ------------------------------------------------------------------
-    def names(self) -> List[str]:
-        with self._lock:
-            return list(self._profiles)
-
-    def get(self, name: str) -> ColorProfile:
-        with self._lock:
-            return self._profiles.get(name) or ColorProfile.preset("default")
-
-    def save(self, profile: ColorProfile) -> ColorProfile:
-        with self._lock:
-            profile.builtin = profile.name in BUILTIN_PRESETS
-            if profile.builtin:
-                raise ValueError(
-                    f"'{profile.name}' is a built-in preset - save under a new name"
-                )
-            self._profiles[profile.name] = profile
-            self._save()
-            return profile
-
-    def delete(self, name: str) -> None:
-        with self._lock:
-            if name in BUILTIN_PRESETS:
-                raise ValueError("Built-in presets cannot be deleted")
-            self._profiles.pop(name, None)
-            self._save()
-
-    def to_dict(self) -> Dict[str, object]:
-        with self._lock:
-            return {
-                "profiles": [p.to_dict() for p in self._profiles.values()],
-                "builtins": list(BUILTIN_PRESETS),
-                "colors": [
-                    {"code": code, "name": COLOR_NAMES[code]} for code in COLOR_CODES
-                ],
-            }
-
-
 #: Convenience wrapper matching the original module-level ``classify_hue`` helper.
 def classify_hsv(
     h: float, s: float, v: float, profile: Optional[ColorProfile] = None
 ) -> Tuple[str, float]:
     return (profile or ColorProfile.preset("default")).classify(h, s, v)
-
-
-profile_store = ProfileStore()

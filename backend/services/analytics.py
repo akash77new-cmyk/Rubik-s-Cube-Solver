@@ -1,21 +1,28 @@
-"""Solve history and aggregate statistics for the analytics dashboard."""
+"""Solve history and aggregate statistics for the analytics dashboard.
+
+History is stored in the database (table ``solves``). Like settings, it is read
+from memory and written to the database first: ``summary()`` runs for every state
+snapshot, so it must never wait for the network.
+"""
 
 from __future__ import annotations
 
-import json
 import threading
 import time
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
+from dataclasses import asdict, dataclass, field, fields
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from backend.config import HISTORY_FILE
+from sqlalchemy import delete, select
+
 from backend.core.moves import FACES
+from backend.db.database import Database
+from backend.db.models import SolveRow
 
 
 @dataclass
 class SolveRecord:
-    """One completed solve, persisted to disk."""
+    """One completed solve (one row of the ``solves`` table)."""
 
     id: str
     started_at: float
@@ -36,46 +43,53 @@ class SolveRecord:
         return asdict(self)
 
 
+#: SolveRecord keeps times as Unix seconds (what the UI uses); the table stores
+#: real timestamps, so the history is readable in any SQL tool.
+_TIME_FIELDS = ("started_at", "finished_at")
+
+
+def row_from_record(record: SolveRecord) -> SolveRow:
+    values = asdict(record)
+    for name in _TIME_FIELDS:
+        values[name] = datetime.fromtimestamp(values[name], tz=timezone.utc)
+    return SolveRow(**values)
+
+
+def record_from_row(row: SolveRow) -> SolveRecord:
+    values = {f.name: getattr(row, f.name) for f in fields(SolveRecord)}
+    for name in _TIME_FIELDS:
+        values[name] = values[name].timestamp()
+    return SolveRecord(**values)
+
+
 class AnalyticsStore:
-    """Append-only solve log with derived session/lifetime statistics."""
+    """Solve history (memory + database) with derived session/lifetime statistics."""
 
-    MAX_RECORDS = 200
-
-    def __init__(self, path: Path = HISTORY_FILE) -> None:
-        self._path = path
-        self._lock = threading.RLock()
-        self._records: List[SolveRecord] = []
+    def __init__(self, database: Database) -> None:
+        self._db = database
+        self._lock = threading.RLock()       # guards the memory copy
+        self._write_lock = threading.Lock()  # one database write at a time
+        self._records: List[SolveRecord] = self._load()
         self._session_started = time.time()
         self._session_ids: set[str] = set()
         self._detection_samples: List[float] = []
-        self._load()
 
     # ------------------------------------------------------------------
-    def _load(self) -> None:
-        if not self._path.exists():
-            return
-        try:
-            payload = json.loads(self._path.read_text("utf-8"))
-            for item in payload.get("records", []):
-                try:
-                    self._records.append(SolveRecord(**item))
-                except TypeError:
-                    continue  # skip records written by an older schema
-        except (json.JSONDecodeError, OSError):
-            self._records = []
-
-    def _save(self) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"records": [r.to_dict() for r in self._records[-self.MAX_RECORDS :]]}
-        self._path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    def _load(self) -> List[SolveRecord]:
+        with self._db.transaction("load solve history") as session:
+            rows = session.scalars(select(SolveRow).order_by(SolveRow.finished_at, SolveRow.id))
+            return [record_from_row(row) for row in rows]
 
     # ------------------------------------------------------------------
     def record(self, record: SolveRecord) -> SolveRecord:
-        with self._lock:
-            self._records.append(record)
-            self._session_ids.add(record.id)
-            self._save()
-            return record
+        """Save one solve. Raises StorageError if the database refuses it."""
+        with self._write_lock:
+            with self._db.transaction("save the solve to history") as session:
+                session.add(row_from_record(record))
+            with self._lock:
+                self._records.append(record)
+                self._session_ids.add(record.id)
+        return record
 
     def note_detection_confidence(self, confidence: float) -> None:
         """Feed the running average-confidence metric."""
@@ -153,9 +167,11 @@ class AnalyticsStore:
         The session clock is reset too - leaving it running after "Clear
         history" would report a session length with no solves behind it.
         """
-        with self._lock:
-            self._records.clear()
-            self._session_ids.clear()
-            self._detection_samples.clear()
-            self._session_started = time.time()
-            self._save()
+        with self._write_lock:
+            with self._db.transaction("clear solve history") as session:
+                session.execute(delete(SolveRow))
+            with self._lock:
+                self._records.clear()
+                self._session_ids.clear()
+                self._detection_samples.clear()
+                self._session_started = time.time()

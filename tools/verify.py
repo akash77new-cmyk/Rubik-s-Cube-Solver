@@ -173,16 +173,28 @@ def run_offline() -> None:
         overlay.draw_move(frame.copy(), Move("B"), turn_back=True)
         return "18 move arrows + scan HUD + turn-back hint drawn"
 
+    def memory_stores() -> dict:
+        """Stores on a fresh in-memory database (built by the real migrations)."""
+        from backend.db import connect
+        from backend.services.analytics import AnalyticsStore
+        from backend.services.profiles import ProfileStore
+        from backend.services.settings import SettingsStore
+
+        database = connect("sqlite://")
+        return {
+            "settings": SettingsStore(database),
+            "profiles": ProfileStore(database),
+            "analytics": AnalyticsStore(database),
+            "database": database,
+        }
+
     @check("dataset · a scanned cube is saved as 54 labelled sticker crops")
     def _() -> str:
         import json
         import tempfile
 
-        from backend.config import SettingsStore
-        from backend.core.color import ProfileStore
         from backend.core.cube import FACE_ORDER
         from backend.core.solver import SolverEngine
-        from backend.services.analytics import AnalyticsStore
         from backend.services.dataset import DatasetStore
         from backend.services.logbus import LogBus
         from backend.services.session import SolveSession
@@ -198,11 +210,9 @@ def run_offline() -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             session = SolveSession(
-                settings=SettingsStore(root / "settings.json"),
-                profiles=ProfileStore(root / "profiles.json"),
+                **memory_stores(),
                 solver=SolverEngine(),
                 logs=LogBus(),
-                analytics=AnalyticsStore(root / "history.json"),
                 publish_event=lambda event, data: None,
                 publish_frame=lambda jpeg: None,
                 dataset=DatasetStore(root / "dataset"),
@@ -224,14 +234,9 @@ def run_offline() -> None:
 
     @check("guided scan · any order, mirrored preview, 1 s hold, a rotated face -> the right cube")
     def _() -> str:
-        import tempfile
-
-        from backend.config import SettingsStore
-        from backend.core.color import ProfileStore
         from backend.core.cube import FACE_ORDER
         from backend.core.scanning import orientation_map, reorder
         from backend.core.solver import SolverEngine
-        from backend.services.analytics import AnalyticsStore
         from backend.services.logbus import LogBus
         from backend.services.session import SolveSession
 
@@ -243,36 +248,32 @@ def run_offline() -> None:
                 cv2.rectangle(frame, (x - 42, y - 42), (x + 42, y + 42), COLOR_BGR[code], -1)
             return cv2.flip(frame, 1)  # a selfie-style (mirrored) camera preview
 
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            events: List[str] = []
-            session = SolveSession(
-                settings=SettingsStore(root / "settings.json"),
-                profiles=ProfileStore(root / "profiles.json"),
-                solver=SolverEngine(),
-                logs=LogBus(),
-                analytics=AnalyticsStore(root / "history.json"),
-                publish_event=lambda event, data: events.append(event),
-                publish_frame=lambda jpeg: None,
-            )
-            clock = [0.0]
-            session._clock = lambda: clock[0]  # fake clock: 30 frames per second below
-            session.handle_command("scan.auto", {"enabled": True})  # manual is the default
-            session.start_scan(open_camera=False)
-            cube = CubeState.solved().apply_sequence(random_scramble(20, seed=8))
-            for face in ["D", "B", "F", "U", "L", "R"]:  # not the guide's order
-                colors = cube.face(face)
-                if face == "L":
-                    colors = reorder(colors, orientation_map(1))  # held a quarter turn off
-                frame = face_frame(colors)
-                for number in range(45):  # 1.5 s held still: captured once, after the hold
-                    session._process_frame(frame.copy(), mirrored=True)
-                    clock[0] += 1 / 30
-                    if number == 26:  # 0.9 s: the read is stable, but the 1 s hold is not over
-                        assert face not in session._scanned, f"{face} captured before the hold"
-            scanned = {f: session._scanned[f]["colors"] for f in FACE_ORDER}
-            assert scanned == {f: cube.face(f) for f in FACE_ORDER}, "scanned cube is wrong"
-            assert "scan:repaired" in events, "the rotated face was not repaired"
+        events: List[str] = []
+        session = SolveSession(
+            **memory_stores(),
+            solver=SolverEngine(),
+            logs=LogBus(),
+            publish_event=lambda event, data: events.append(event),
+            publish_frame=lambda jpeg: None,
+        )
+        clock = [0.0]
+        session._clock = lambda: clock[0]  # fake clock: 30 frames per second below
+        session.handle_command("scan.auto", {"enabled": True})  # manual is the default
+        session.start_scan(open_camera=False)
+        cube = CubeState.solved().apply_sequence(random_scramble(20, seed=8))
+        for face in ["D", "B", "F", "U", "L", "R"]:  # not the guide's order
+            colors = cube.face(face)
+            if face == "L":
+                colors = reorder(colors, orientation_map(1))  # held a quarter turn off
+            frame = face_frame(colors)
+            for number in range(45):  # 1.5 s held still: captured once, after the hold
+                session._process_frame(frame.copy(), mirrored=True)
+                clock[0] += 1 / 30
+                if number == 26:  # 0.9 s: the read is stable, but the 1 s hold is not over
+                    assert face not in session._scanned, f"{face} captured before the hold"
+        scanned = {f: session._scanned[f]["colors"] for f in FACE_ORDER}
+        assert scanned == {f: cube.face(f) for f in FACE_ORDER}, "scanned cube is wrong"
+        assert "scan:repaired" in events, "the rotated face was not repaired"
         return (
             "6 faces in random order through a mirrored preview, each captured after a 1 s "
             "hold, 1 held rotated -> exact cube"

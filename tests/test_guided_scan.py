@@ -6,16 +6,14 @@ import cv2
 import numpy as np
 import pytest
 
-from backend.config import SettingsStore
-from backend.core.color import ProfileStore
 from backend.core.cube import FACE_ORDER, CubeState, random_scramble
 from backend.core.scanning import orientation_map, reorder
 from backend.core.solver import SolverEngine
-from backend.services.analytics import AnalyticsStore
 from backend.services.dataset import DatasetStore
 from backend.services.logbus import LogBus
 from backend.services.session import SolveSession
 from backend.vision.overlay import COLOR_BGR
+from tests.storage import memory_stores
 from tests.synthetic import synthetic_face
 
 STEADY = 6  # frames per face: the detector locks after 6 identical reads
@@ -30,11 +28,9 @@ def cube():
 def session(tmp_path):
     events = []
     s = SolveSession(
-        settings=SettingsStore(tmp_path / "settings.json"),
-        profiles=ProfileStore(tmp_path / "profiles.json"),
+        **memory_stores(),
         solver=SolverEngine(),
         logs=LogBus(),
-        analytics=AnalyticsStore(tmp_path / "history.json"),
         publish_event=lambda event, data: events.append((event, data)),
         publish_frame=lambda jpeg: None,
         dataset=DatasetStore(tmp_path / "dataset"),

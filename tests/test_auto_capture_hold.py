@@ -8,13 +8,11 @@ The detector needs 6 identical frames (0.6 s here) before a read counts as stabl
 
 import pytest
 
-from backend.config import SettingsStore
-from backend.core.color import ProfileStore
 from backend.core.cube import CubeState, random_scramble
 from backend.core.solver import SolverEngine
-from backend.services.analytics import AnalyticsStore
 from backend.services.logbus import LogBus
 from backend.services.session import SolveSession
+from tests.storage import memory_stores
 from tests.synthetic import synthetic_face
 
 FPS = 10
@@ -28,11 +26,9 @@ def cube():
 def new_session(tmp_path):
     events = []
     s = SolveSession(
-        settings=SettingsStore(tmp_path / "settings.json"),
-        profiles=ProfileStore(tmp_path / "profiles.json"),
+        **memory_stores(),
         solver=SolverEngine(),
         logs=LogBus(),
-        analytics=AnalyticsStore(tmp_path / "history.json"),
         publish_event=lambda event, data: events.append((event, data)),
         publish_frame=lambda jpeg: None,
     )

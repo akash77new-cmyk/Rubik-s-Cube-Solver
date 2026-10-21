@@ -4,10 +4,11 @@ Run standalone::
 
     python -m backend.engine
 
-This process owns the camera, the OpenCV pipeline and the Kociemba solver, and
-publishes everything over the TCP engine socket. The web server is just a
-subscriber, so the blocking capture loop can never stall HTTP requests - and the
-same engine could equally well feed a native client or a second machine.
+This process owns the camera, the OpenCV pipeline, the Kociemba solver and the
+database connection, and publishes everything over the TCP engine socket. The web
+server is just a subscriber, so the blocking capture loop can never stall HTTP
+requests - and the same engine could equally well feed a native client or a second
+machine.
 """
 
 from __future__ import annotations
@@ -19,14 +20,17 @@ import sys
 import threading
 from typing import Any, Dict
 
-from backend.config import DATASET_DIR, ENGINE_HOST, ENGINE_PORT, RUNTIME, settings_store
-from backend.core.color import profile_store
+from backend.config import DATA_DIR, DATASET_DIR, ENGINE_HOST, ENGINE_PORT, RUNTIME
 from backend.core.solver import solver_engine
+from backend.db import Database, StorageError, connect
 from backend.ipc.server import ClientConnection, EngineServer
 from backend.services.analytics import AnalyticsStore
 from backend.services.dataset import DatasetStore
+from backend.services.legacy_import import import_legacy_json
 from backend.services.logbus import log_bus
+from backend.services.profiles import ProfileStore
 from backend.services.session import SolveSession
+from backend.services.settings import SettingsStore
 
 log = logging.getLogger("engine")
 
@@ -34,8 +38,13 @@ log = logging.getLogger("engine")
 class VisionEngine:
     """Wires the session to the socket server."""
 
-    def __init__(self, host: str = ENGINE_HOST, port: int = ENGINE_PORT) -> None:
-        self.analytics = AnalyticsStore()
+    def __init__(
+        self, database: Database, host: str = ENGINE_HOST, port: int = ENGINE_PORT
+    ) -> None:
+        self.database = database
+        self.settings = SettingsStore(database)
+        self.profiles = ProfileStore(database)
+        self.analytics = AnalyticsStore(database)
         # Training-data collection (Phase 2): off in production, see config.py.
         self.dataset = DatasetStore(DATASET_DIR) if RUNTIME.dataset_enabled else None
         self.server = EngineServer(
@@ -45,14 +54,15 @@ class VisionEngine:
             on_connect=self._on_connect,
         )
         self.session = SolveSession(
-            settings=settings_store,
-            profiles=profile_store,
+            settings=self.settings,
+            profiles=self.profiles,
             solver=solver_engine,
             logs=log_bus,
             analytics=self.analytics,
             publish_event=self.server.broadcast,
             publish_frame=self.server.broadcast_frame,
             dataset=self.dataset,
+            database=database,
         )
         # Stream every log entry to subscribers as it happens.
         log_bus.add_listener(lambda entry: self.server.broadcast("log", entry.to_dict()))
@@ -90,6 +100,13 @@ class VisionEngine:
             f"Vision engine online at {self.server.host}:{self.server.port}",
             source="engine",
         )
+        status = self.database.status()
+        summary = (
+            f"Database: {status['backend']} {status['serverVersion']} at {status['location']}, "
+            f"schema {status['schemaRevision']}"
+        )
+        log.info(summary)  # the terminal, and Render's log
+        log_bus.success(summary, source="database")  # the Logs page
         if self.dataset is not None:
             log_bus.info(f"Dataset collection is on: {DATASET_DIR}", source="dataset")
         # Building the two-phase pruning tables can take a while on first run;
@@ -108,6 +125,7 @@ class VisionEngine:
         self._stop.set()
         self.session.shutdown()
         self.server.stop()
+        self.database.dispose()
         log.info("Vision engine stopped")
 
 
@@ -124,7 +142,19 @@ def main(argv: list[str] | None = None) -> int:
         datefmt="%H:%M:%S",
     )
 
-    engine = VisionEngine(args.host, args.port)
+    # The database comes first: without it there is nowhere to keep settings and
+    # history, so stop with a clear message instead of running half-broken.
+    try:
+        database = connect()
+    except StorageError as exc:
+        log.error("%s", exc)
+        log.error("Check DATABASE_URL (see .env.example). The engine cannot start without it.")
+        return 1
+    for message in import_legacy_json(database, DATA_DIR):
+        log.info(message)
+        log_bus.info(message, source="database")
+
+    engine = VisionEngine(database, args.host, args.port)
 
     def _handle_signal(signum, _frame):  # pragma: no cover - signal path
         engine.shutdown()

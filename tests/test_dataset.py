@@ -10,25 +10,21 @@ import json
 import cv2
 import pytest
 
-from backend.config import SettingsStore
-from backend.core.color import ProfileStore
 from backend.core.cube import FACE_ORDER, CubeState, random_scramble
 from backend.core.solver import SolverEngine
-from backend.services.analytics import AnalyticsStore
 from backend.services.dataset import LIGHTING_OPTIONS, DatasetStore, build_scan_record
 from backend.services.logbus import LogBus
 from backend.services.session import SolveSession
+from tests.storage import memory_stores
 from tests.synthetic import synthetic_face
 
 
 def make_session(tmp_path, with_dataset=True):
     events = []
     session = SolveSession(
-        settings=SettingsStore(tmp_path / "settings.json"),
-        profiles=ProfileStore(tmp_path / "profiles.json"),
+        **memory_stores(),
         solver=SolverEngine(),
         logs=LogBus(),
-        analytics=AnalyticsStore(tmp_path / "history.json"),
         publish_event=lambda event, data: events.append((event, data)),
         publish_frame=lambda jpeg: None,
         dataset=DatasetStore(tmp_path / "dataset") if with_dataset else None,
