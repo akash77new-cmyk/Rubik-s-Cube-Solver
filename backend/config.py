@@ -38,6 +38,9 @@ SETTINGS_FILE = DATA_DIR / "settings.json"
 PROFILES_FILE = DATA_DIR / "hsv_profiles.json"
 HISTORY_FILE = DATA_DIR / "solve_history.json"
 
+#: Local development database (used when DATABASE_URL is not set).
+DEFAULT_SQLITE_FILE = DATA_DIR / "cube.db"
+
 for _directory in (DATA_DIR, CACHE_DIR, SOLVER_TABLE_DIR):
     _directory.mkdir(parents=True, exist_ok=True)
 
@@ -60,13 +63,32 @@ class RuntimeConfig:
     web_port: int
     engine_host: str
     engine_port: int
-    secret_key: str
+    secret_key: str = field(repr=False)       # hidden from repr(), so it never ends up in a log
     allowed_origins: Union[str, List[str]]    # "*" or a list of origins
     dataset_enabled: bool                     # may scans be saved as training data?
+    database_url: str = field(repr=False)     # SQLAlchemy URL; may contain a password
 
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+
+def normalize_database_url(raw: str) -> str:
+    """Turn a pasted connection string into a SQLAlchemy URL.
+
+    Neon gives ``postgresql://user:password@host/db?sslmode=require...``. SQLAlchemy
+    needs to be told which driver to use (psycopg 3), so the scheme becomes
+    ``postgresql+psycopg://``. SQLite URLs are used as they are.
+    """
+    url = raw.strip().strip("'\"")
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    if url.startswith(("postgresql+psycopg://", "sqlite://")):
+        return url
+    raise ConfigError(
+        "DATABASE_URL must start with postgresql:// (Neon's connection string) or sqlite://"
+    )
 
 
 def read_runtime_config(env: Mapping[str, str]) -> RuntimeConfig:
@@ -100,6 +122,18 @@ def read_runtime_config(env: Mapping[str, str]) -> RuntimeConfig:
     else:
         raise ConfigError(f"CUBE_DATASET_ENABLED must be true or false, got {raw_dataset!r}")
 
+    # Production must say where the data lives: Render's disk is wiped on every
+    # deploy, so a silent local fallback would lose all history. Locally the data
+    # lives in a SQLite file, so nothing needs setting up.
+    raw_database_url = (env.get("DATABASE_URL") or "").strip()
+    if not raw_database_url:
+        if production:
+            raise ConfigError(
+                "DATABASE_URL must be set when APP_ENV=production (your Neon connection string)"
+            )
+        raw_database_url = f"sqlite:///{DEFAULT_SQLITE_FILE.as_posix()}"
+    database_url = normalize_database_url(raw_database_url)
+
     return RuntimeConfig(
         app_env=app_env,
         web_host=env.get("CUBE_WEB_HOST") or ("0.0.0.0" if production else "127.0.0.1"),
@@ -110,6 +144,7 @@ def read_runtime_config(env: Mapping[str, str]) -> RuntimeConfig:
         secret_key=secret,
         allowed_origins=origins,
         dataset_enabled=dataset_enabled,
+        database_url=database_url,
     )
 
 

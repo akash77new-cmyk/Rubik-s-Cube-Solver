@@ -29,5 +29,10 @@ Flask>=3.0                      # HTTP server + MJPEG stream
 Flask-SocketIO>=5.4             # WebSocket bridge to the React frontend
 simple-websocket>=1.0           # WebSocket transport for Flask-SocketIO
 
+# --- Database (Phase 3) -----------------------------------------------------
+SQLAlchemy>=2.0.33              # ORM + connection pool (2.0.33+ handles Neon's idle disconnects)
+alembic>=1.16                   # versioned schema migrations
+psycopg[binary]>=3.2            # PostgreSQL driver; binary wheels, so no compiler needed
+
 # --- Configuration ---------------------------------------------------------
 python-dotenv>=1.0              # loads a local .env file into environment variables

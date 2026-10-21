@@ -8,7 +8,27 @@ from pathlib import Path
 
 import pytest
 
-from backend.config import DATA_DIR, DATASET_DIR, ConfigError, read_runtime_config
+from backend.config import (
+    DATA_DIR,
+    DATASET_DIR,
+    DEFAULT_SQLITE_FILE,
+    ConfigError,
+    normalize_database_url,
+    read_runtime_config,
+)
+
+#: A connection string in the format Neon gives (made-up host and password).
+NEON = (
+    "postgresql://neondb_owner:s3cret@ep-cool-name-a1b2c3.ap-southeast-1.aws.neon.tech/neondb"
+    "?sslmode=require&channel_binding=require"
+)
+
+#: The minimum a production config needs (DATABASE_URL since Phase 3).
+PRODUCTION = {
+    "APP_ENV": "production",
+    "FLASK_SECRET_KEY": "x",
+    "DATABASE_URL": "postgresql://user:pw@db.example/cube",
+}
 
 
 def test_data_dir_is_the_test_temp_folder():
@@ -33,9 +53,7 @@ def test_production_without_secret_raises():
 
 
 def test_production_binds_all_interfaces_on_render_port():
-    config = read_runtime_config(
-        {"APP_ENV": "production", "FLASK_SECRET_KEY": "s3cret", "PORT": "10000"}
-    )
+    config = read_runtime_config({**PRODUCTION, "FLASK_SECRET_KEY": "s3cret", "PORT": "10000"})
     assert config.is_production
     assert (config.web_host, config.web_port) == ("0.0.0.0", 10000)
     assert config.secret_key == "s3cret"
@@ -60,13 +78,12 @@ def test_invalid_app_env_raises():
 
 def test_dataset_collection_defaults_follow_app_env():
     assert read_runtime_config({}).dataset_enabled is True
-    production = {"APP_ENV": "production", "FLASK_SECRET_KEY": "x"}
-    assert read_runtime_config(production).dataset_enabled is False
+    assert read_runtime_config(PRODUCTION).dataset_enabled is False
 
 
 def test_dataset_collection_can_be_set_explicitly():
     assert read_runtime_config({"CUBE_DATASET_ENABLED": "0"}).dataset_enabled is False
-    production = {"APP_ENV": "production", "FLASK_SECRET_KEY": "x", "CUBE_DATASET_ENABLED": "yes"}
+    production = {**PRODUCTION, "CUBE_DATASET_ENABLED": "yes"}
     assert read_runtime_config(production).dataset_enabled is True
     with pytest.raises(ConfigError):
         read_runtime_config({"CUBE_DATASET_ENABLED": "maybe"})
@@ -74,3 +91,38 @@ def test_dataset_collection_can_be_set_explicitly():
 
 def test_dataset_dir_is_isolated_in_tests():
     assert "cube-test-dataset-" in str(DATASET_DIR)
+
+
+# --- DATABASE_URL (Phase 3) --------------------------------------------------
+def test_neon_connection_string_gets_the_psycopg_driver():
+    url = normalize_database_url(NEON)
+    assert url.startswith("postgresql+psycopg://neondb_owner:s3cret@ep-cool-name")
+    assert url.endswith("?sslmode=require&channel_binding=require")
+    assert normalize_database_url("postgres://u:p@h/db") == "postgresql+psycopg://u:p@h/db"
+
+
+def test_pasted_quotes_and_spaces_are_removed():
+    assert normalize_database_url(f"  '{NEON}'\n") == normalize_database_url(NEON)
+
+
+def test_sqlite_urls_are_kept_and_other_schemes_rejected():
+    assert normalize_database_url("sqlite:///data/cube.db") == "sqlite:///data/cube.db"
+    with pytest.raises(ConfigError, match="postgresql://"):
+        normalize_database_url("mysql://u:p@h/db")
+    with pytest.raises(ConfigError):
+        normalize_database_url("psql 'postgresql://u:p@h/db'")
+
+
+def test_development_defaults_to_a_sqlite_file_in_the_data_folder():
+    config = read_runtime_config({})
+    assert config.database_url == f"sqlite:///{DEFAULT_SQLITE_FILE.as_posix()}"
+
+
+def test_production_requires_database_url():
+    with pytest.raises(ConfigError, match="DATABASE_URL"):
+        read_runtime_config({"APP_ENV": "production", "FLASK_SECRET_KEY": "x"})
+
+
+def test_secrets_never_appear_in_the_config_repr():
+    config = read_runtime_config({"DATABASE_URL": NEON, "FLASK_SECRET_KEY": "top-secret"})
+    assert "s3cret" not in repr(config) and "top-secret" not in repr(config)
