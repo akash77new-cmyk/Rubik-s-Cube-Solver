@@ -159,6 +159,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         message: `54 stickers · ${data.corrected} corrected`,
       }),
     );
+    socket.on("storage:error", (data: { message: string }) =>
+      pushToast({ tone: "critical", title: "Not saved", message: data.message }),
+    );
     socket.on("engine:disconnected", () =>
       pushToast({ tone: "warning", title: "Vision engine disconnected" }),
     );

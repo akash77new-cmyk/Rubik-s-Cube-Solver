@@ -323,7 +323,23 @@ export interface Snapshot {
   detection: DetectionInfo | null;
   physicalSteps: string[];
   dataset: DatasetInfo;
+  database: DatabaseInfo | null;
   timestamp: number;
+}
+
+/** Where settings, HSV profiles and solve history are stored (Phase 3). */
+export interface DatabaseInfo {
+  backend: "PostgreSQL" | "SQLite";
+  provider: string | null;
+  location: string;
+  /** null until the first check */
+  connected: boolean | null;
+  error: string | null;
+  serverVersion: string | null;
+  schemaRevision: string | null;
+  /** pgvector version the server offers (used from Phase 7), or null */
+  pgvector: string | null;
+  checkedAt: number | null;
 }
 
 export interface DatasetStats {

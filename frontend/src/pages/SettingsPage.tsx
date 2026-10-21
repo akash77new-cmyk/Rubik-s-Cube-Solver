@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button, Card, KeyValue, Segmented, SliderRow, Tag, ToggleRow } from "@/components/ui";
 import { PageHead } from "@/components/layout";
-import { IconCamera, IconRestart, IconSave } from "@/components/Icons";
+import { IconCamera, IconDatabase, IconRestart, IconSave } from "@/components/Icons";
 import { useApp } from "@/state/AppStore";
 import { CUBE_COLORS, COLOR_NAMES } from "@/lib/colors";
 import { COLOR_CODES, THEMES, type ColorCode } from "@/lib/types";
@@ -69,7 +69,7 @@ export default function SettingsPage() {
     <>
       <PageHead
         title="Settings"
-        description="Everything here is persisted to data/settings.json and applied to the running engine immediately."
+        description="Everything here is saved in the database and applied to the running engine immediately."
         actions={
           <Button icon={<IconRestart size={16} />} variant="danger" onClick={() => send("settings.reset")}>
             Reset to defaults
@@ -304,12 +304,55 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      <Card title="Configuration file" description="Where these values live">
-        <KeyValue label="Settings">data/settings.json</KeyValue>
-        <KeyValue label="HSV profiles">data/hsv_profiles.json</KeyValue>
-        <KeyValue label="Solve history">data/solve_history.json</KeyValue>
-        <KeyValue label="Solver tables">.cache/twophase/</KeyValue>
-      </Card>
+      <StorageCard />
     </>
+  );
+}
+
+/** Where settings, HSV profiles and solve history are kept, and whether that works. */
+function StorageCard() {
+  const { snapshot, send } = useApp();
+  const database = snapshot?.database;
+
+  return (
+    <Card
+      title="Storage"
+      description="Settings, HSV profiles and solve history are kept in this database"
+      icon={<IconDatabase size={16} />}
+      actions={
+        <Button size="sm" variant="ghost" onClick={() => send("database.check")} disabled={!database}>
+          Check connection
+        </Button>
+      }
+    >
+      {database ? (
+        <>
+          <KeyValue label="Database">
+            {database.backend} {database.serverVersion ?? ""}
+            {database.provider ? ` · ${database.provider}` : ""}
+          </KeyValue>
+          <KeyValue label="Location">{database.location}</KeyValue>
+          <KeyValue label="Status">
+            {database.connected === false ? (
+              <Tag tone="critical">Not reachable</Tag>
+            ) : database.connected ? (
+              <Tag tone="good">Connected</Tag>
+            ) : (
+              <Tag>Not checked yet</Tag>
+            )}
+          </KeyValue>
+          {database.error && <KeyValue label="Last error">{database.error}</KeyValue>}
+          <KeyValue label="Schema version">{database.schemaRevision ?? "—"}</KeyValue>
+          {database.backend === "PostgreSQL" && (
+            <KeyValue label="pgvector">
+              {database.pgvector ? `${database.pgvector} available` : "not available"}
+            </KeyValue>
+          )}
+        </>
+      ) : (
+        <KeyValue label="Database">Not connected to the engine</KeyValue>
+      )}
+      <KeyValue label="Solver tables">.cache/twophase/</KeyValue>
+    </Card>
   );
 }
