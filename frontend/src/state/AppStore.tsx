@@ -22,6 +22,7 @@ import type {
   AnalyticsInfo,
   CalibrationInfo,
   CameraInfo,
+  DatabaseInfo,
   DetectionInfo,
   LogEntry,
   SettingsInfo,
@@ -161,6 +162,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     );
     socket.on("storage:error", (data: { message: string }) =>
       pushToast({ tone: "critical", title: "Not saved", message: data.message }),
+    );
+    socket.on("database:checked", (data: DatabaseInfo) =>
+      pushToast(
+        data.connected
+          ? {
+              tone: "good",
+              title: "Connection OK",
+              message: `${data.backend} ${data.serverVersion ?? ""}${data.provider ? ` · ${data.provider}` : ""}`,
+            }
+          : { tone: "critical", title: "Database not reachable", message: data.error ?? "" },
+      ),
     );
     socket.on("engine:disconnected", () =>
       pushToast({ tone: "warning", title: "Vision engine disconnected" }),

@@ -363,6 +363,16 @@ def run_live(url: str, expect_db: str | None = None) -> None:
         client.emit("command", {"command": name, "payload": payload or {}})
         time.sleep(settle)
 
+    def wait_for(condition: Callable[[], bool], timeout: float = 5.0) -> bool:
+        """Poll until condition() is true. A save to a remote database (Neon from a
+        laptop: ~0.5 s) takes longer than the fixed settle time."""
+        deadline = time.time() + timeout
+        while not condition():
+            if time.time() > deadline:
+                return False
+            time.sleep(0.05)
+        return True
+
     @check("live · Socket.IO connects and receives a state snapshot")
     def _() -> str:
         client.connect(url, wait_timeout=15)
@@ -415,8 +425,9 @@ def run_live(url: str, expect_db: str | None = None) -> None:
         command("calibration.stop")
         original = state["settings"]["target_fps"]
         command("settings.update", {"target_fps": 24})
-        assert state["settings"]["target_fps"] == 24, "settings update did not stick"
+        assert wait_for(lambda: state["settings"]["target_fps"] == 24), "settings update did not stick"
         command("settings.update", {"target_fps": original})
+        assert wait_for(lambda: state["settings"]["target_fps"] == original), "settings were not restored"
         return "HSV range + settings persisted via the socket bridge"
 
     @check("live · database connected, schema up to date")

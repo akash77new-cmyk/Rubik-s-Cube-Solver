@@ -46,6 +46,21 @@ def test_check_connection_command(session):
     assert result["ok"] is True and result["database"]["connected"] is True
 
 
+def test_check_connection_tells_the_browser(session):
+    """The ack only says "queued", so the result must arrive as an event (toast)."""
+    session.handle_command("database.check", {})
+    (status,) = [data for event, data in session.events if event == "database:checked"]
+    assert status["connected"] is True and status["backend"] == "SQLite"
+
+
+def test_a_failed_check_tells_the_browser_why(session, monkeypatch):
+    down = dict(session.db.status(), connected=False, error="connection refused")
+    monkeypatch.setattr(session.db, "check", lambda: down)
+    result = session.handle_command("database.check", {})
+    assert result["ok"] is False
+    assert ("database:checked", down) in session.events
+
+
 def test_a_failed_settings_save_is_reported_and_changes_nothing(session, monkeypatch):
     break_database(session, monkeypatch)
     result = session.handle_command("settings.update", {"target_fps": 12})

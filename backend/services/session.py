@@ -1352,6 +1352,9 @@ class SolveSession:
                 self._logs.success("Database connection OK", source="database")
             else:
                 self._logs.error(f"Database not reachable: {status['error']}", source="database")
+            # The Socket.IO ack only says "queued", so the result reaches the browser as
+            # an event: it shows a toast, even when the Storage card itself is unchanged.
+            self._publish_event("database:checked", status)
             self._broadcast_state()
             return {"ok": bool(status["connected"]), "database": status}
         return {"ok": False, "error": f"Unknown command: {command}"}
