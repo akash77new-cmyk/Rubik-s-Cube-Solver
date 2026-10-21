@@ -3,6 +3,7 @@
 
     python tools/verify.py            # offline checks only
     python tools/verify.py --live     # also drive a running app over Socket.IO
+    python tools/verify.py --live --expect-db postgresql   # ... and require Postgres
 
 Offline checks need nothing running. The ``--live`` pass expects
 ``python run.py --headless`` in another terminal and exercises the real
@@ -188,6 +189,48 @@ def run_offline() -> None:
             "database": database,
         }
 
+    @check("database · migrations build the schema; data survives a restart")
+    def _() -> str:
+        import tempfile
+
+        from alembic.autogenerate import compare_metadata
+        from alembic.migration import MigrationContext
+
+        from backend.core.color import ColorProfile
+        from backend.db import connect, head_revision
+        from backend.db.models import Base
+        from backend.services.analytics import AnalyticsStore, SolveRecord
+        from backend.services.profiles import ProfileStore
+        from backend.services.settings import SettingsStore
+
+        # ignore_cleanup_errors: on Windows a failed check could leave the file open.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            url = f"sqlite:///{Path(tmp, 'verify.db').as_posix()}"
+            first = connect(url)  # a brand-new database: every migration runs
+            status = first.status()
+            assert status["schemaRevision"] == head_revision(), f"schema at {status['schemaRevision']}"
+            with first.engine.connect() as connection:
+                diff = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+            assert not diff, f"models.py and the migrations disagree: {diff}"
+
+            SettingsStore(first).update({"target_fps": 24})
+            ProfileStore(first).save(ColorProfile(name="verify-lamp"))
+            now = time.time()
+            AnalyticsStore(first).record(SolveRecord(
+                id="verify1", started_at=now - 60, finished_at=now, move_count=20,
+                quarter_turns=24, solve_ms=3.5, scan_seconds=30.0, execution_seconds=60.0,
+                backend="test", notation="R U",
+            ))
+            first.dispose()
+
+            second = connect(url)  # like restarting the app
+            assert SettingsStore(second).current.target_fps == 24, "settings were not kept"
+            assert "verify-lamp" in ProfileStore(second).names(), "profile was not kept"
+            history = AnalyticsStore(second).summary()
+            assert history["totalSolves"] == 1, "solve history was not kept"
+            second.dispose()
+        return f"schema {head_revision()} matches models.py; settings, a profile and a solve survived a restart"
+
     @check("dataset · a scanned cube is saved as 54 labelled sticker crops")
     def _() -> str:
         import json
@@ -303,7 +346,7 @@ def run_offline() -> None:
 # Live checks
 # ======================================================================
 
-def run_live(url: str) -> None:
+def run_live(url: str, expect_db: str | None = None) -> None:
     try:
         import socketio  # type: ignore
     except ImportError:
@@ -376,6 +419,25 @@ def run_live(url: str) -> None:
         command("settings.update", {"target_fps": original})
         return "HSV range + settings persisted via the socket bridge"
 
+    @check("live · database connected, schema up to date")
+    def _() -> str:
+        from backend.db import head_revision
+
+        database = state.get("database")
+        assert database, "the engine reported no database"
+        assert database["connected"], f"database not reachable: {database['error']}"
+        assert database["schemaRevision"] == head_revision(), (
+            f"schema {database['schemaRevision']}, code expects {head_revision()}"
+        )
+        if expect_db:
+            assert database["backend"].lower() == expect_db, f"expected {expect_db}, got {database['backend']}"
+        extra = f", pgvector {database['pgvector']} available" if database["pgvector"] else ""
+        provider = f" ({database['provider']})" if database["provider"] else ""
+        return (
+            f"{database['backend']} {database['serverVersion']}{provider} at {database['location']}, "
+            f"schema {database['schemaRevision']}{extra}"
+        )
+
     @check("live · engine streams structured logs")
     def _() -> str:
         assert logs, "no log entries streamed"
@@ -400,12 +462,16 @@ def main(argv: List[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Verify the cube solver pipeline")
     parser.add_argument("--live", action="store_true", help="also test a running app")
     parser.add_argument("--url", default="http://127.0.0.1:8000")
+    parser.add_argument(
+        "--expect-db", choices=["postgresql", "sqlite"],
+        help="with --live: fail unless the app uses this database",
+    )
     args = parser.parse_args(argv)
 
     print("Rubik's Cube Solver - verification\n" + "=" * 72)
     run_offline()
     if args.live:
-        run_live(args.url)
+        run_live(args.url, args.expect_db)
 
     print()
     for status, name, detail in results:
