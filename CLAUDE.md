@@ -55,6 +55,12 @@ vision engine (process 1)  backend/engine.py         single source of truth
    • issues           backend/core/validation.py    structured validation issues
    • scanning         backend/core/scanning.py      scan guide, centre-based face identity, orientation repair
    • DatasetStore     backend/services/dataset.py   confirmed scans → labelled crops
+   • stores           backend/services/settings.py, profiles.py, analytics.py
+   │                  memory copy for reads, written through to the database
+   ▼  SQLAlchemy (psycopg 3)
+database   Neon PostgreSQL in production · SQLite file data/cube.db locally (DATABASE_URL)
+           backend/db/: database.py (engine, transactions, status) · models.py (tables)
+           · migrate.py + migrations/ (Alembic, applied by the engine at start-up)
 ```
 
 - **Command flow:** the UI emits `command` with `{command, payload}` → the server relays it to the
@@ -64,9 +70,29 @@ vision engine (process 1)  backend/engine.py         single source of truth
   `SolveSession._dispatch()` · fields in `snapshot()` · types in `frontend/src/lib/types.ts` ·
   UI in `frontend/src/pages/` and `frontend/src/components/`.
 - `backend/core/` stays pure: no OpenCV, no Flask, no sockets, no file or network I/O.
-- **Persistence today:** JSON files in `data/` (moves to Postgres in Phase 3).
+- **Persistence:** the database in `DATABASE_URL` (see section 3a). `ml/data/` (training scans)
+  stays as files in git.
 - **Production:** `python run.py --prod` runs the engine + gunicorn (`backend/server/wsgi.py`,
   `gunicorn.conf.py`) in one container (`Dockerfile`, `render.yaml`).
+
+### 3a. Database rules (Phase 3)
+- Only the **engine process** (and the CLI tools) open the database. The web server stays a pure
+  relay and never imports `backend.db`.
+- Stores keep a **memory copy** and write **through** to the database: database first, memory
+  only after the commit succeeds. Reads never touch the network, so `snapshot()` and the frame
+  thread never wait for Neon. No database call ever runs on the frame thread.
+- Every read/write goes through `Database.transaction("what")`. A failure becomes a
+  `StorageError` with a plain message; the session logs it, sends `storage:error` (a "Not saved"
+  toast) and the Settings page shows it. Never swallow it silently.
+- Schema changes: change `backend/db/models.py` **and** add a migration
+  (`python -m alembic revision --autogenerate --rev-id 000N -m "..."`, then tidy it).
+  `test_models_match_the_migrations` enforces this. Never edit a migration that has run on Neon.
+- Migrations never import app code (UTCDateTime is written as `sa.DateTime(timezone=True)`).
+- Timestamps are timezone-aware UTC (`UTCDateTime`); `SolveRecord` keeps Unix seconds for the UI.
+- Never print or log `DATABASE_URL` (it contains a password). `Database.status()` and
+  `public_error()` show only the database name and the host, with Neon's endpoint id hidden
+  (the live site is public). Tests never use `.env`'s `DATABASE_URL`; Postgres tests need
+  `CUBE_TEST_POSTGRES_URL` pointing at a throwaway server (never Neon).
 
 ### Cube conventions
 - Faces in order `U R F D L B`. Each face stores 9 stickers in reading order; index 4 is the centre.
@@ -108,7 +134,8 @@ vision engine (process 1)  backend/engine.py         single source of truth
 
 ## 5. Deployment constraints (Render free tier)
 - **512 MB RAM, 0.1 CPU.** Phase 0 baseline is about 160 MB for all processes. Measure memory
-  when adding heavy dependencies.
+  when adding heavy dependencies. Phase 3 (SQLAlchemy, Alembic, psycopg) adds about 50 MB to
+  the engine.
 - Sleeps after 15 min idle (about 1 min to wake). **The disk is temporary:** runtime files vanish
   on restart or redeploy.
 - One gunicorn worker with threads: Socket.IO state lives in memory, so never add workers.
@@ -117,6 +144,10 @@ vision engine (process 1)  backend/engine.py         single source of truth
 - **Until Phase 9 the live site has one shared session for every visitor.**
 - Keep per-frame server work light (0.1 CPU).
 - Dataset collection is off in production (`CUBE_DATASET_ENABLED`); `ml/data/` is committed to git.
+- **Database: Neon free tier** (Singapore, same region as Render). `DATABASE_URL` = the
+  `production` branch's direct connection string (pooling off); it is required in production and
+  set only in the Render dashboard. Neon sleeps after 5 idle minutes: the pool pings each
+  connection before use, and start-up retries the first connection.
 
 ## 6. Commands
 | What | Command |
@@ -128,9 +159,11 @@ vision engine (process 1)  backend/engine.py         single source of truth
 | UI hot reload | `python run.py --dev` and `cd frontend && npm run dev` |
 | Unit tests | `pytest` |
 | Pipeline check | `python tools/verify.py` |
-| Live check (app running) | `python tools/verify.py --live` |
+| Live check (app running) | `python tools/verify.py --live` (add `--expect-db postgresql` to require Postgres) |
+| DB tests on Postgres | `CUBE_TEST_POSTGRES_URL=postgresql://postgres:cube@127.0.0.1:5433/cube_test pytest` (Docker container `cube-pg`, see README) |
+| Migrations | `python -m alembic current` · `python -m alembic upgrade head --sql` (print SQL) |
 | Production mode (Linux) | `APP_ENV=production FLASK_SECRET_KEY=x python run.py --prod` |
-| Docker | `docker build -t cube-solver .` then `docker run --rm -p 8000:8000 -e PORT=8000 -e FLASK_SECRET_KEY=dev cube-solver` |
+| Docker | `docker build -t cube-solver .` then `docker run --rm -p 8000:8000 -e PORT=8000 -e FLASK_SECRET_KEY=dev -e DATABASE_URL=... cube-solver` |
 
 `requirements-prod.txt` is for Linux/Docker only (kociemba needs a C compiler).
 
@@ -138,6 +171,7 @@ vision engine (process 1)  backend/engine.py         single source of truth
 - `backend/core/cube.py` face-cycle tables (`_EDGE_CYCLES`): known correct, verified by tests.
 - `backend/ipc/protocol.py` framing: the engine and the server both depend on it.
 - `tools/verify.py`: the end-to-end smoke test; extend it, don't weaken it.
+- `backend/db/migrations/versions/*`: a migration that has run on Neon is history; add a new one.
 
 ## 8. Roadmap
 | Phase | Goal | Status |

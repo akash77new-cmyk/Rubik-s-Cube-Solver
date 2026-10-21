@@ -14,3 +14,8 @@ services:
         value: production
       - key: FLASK_SECRET_KEY
         generateValue: true
+      # Neon connection string (production branch, Connection pooling off). A secret:
+      # set it in the dashboard (Environment), never in git. Render ignores sync:false
+      # variables when it updates an existing Blueprint, so add it there by hand.
+      - key: DATABASE_URL
+        sync: false

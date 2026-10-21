@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 # Production image: React UI + vision engine + web server in one container.
 #   docker build -t cube-solver .
-#   docker run --rm -p 8000:8000 -e PORT=8000 -e FLASK_SECRET_KEY=dev cube-solver
+#   docker run --rm -p 8000:8000 -e PORT=8000 -e FLASK_SECRET_KEY=dev \
+#     -e DATABASE_URL=postgresql://user:password@host/db cube-solver
+# The engine applies database migrations itself when it starts.
 
 # ---- 1. Build the React frontend -----------------------------------------
 FROM node:22-bookworm-slim AS frontend

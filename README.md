@@ -7,7 +7,7 @@
 **An end-to-end computer-vision pipeline that scans a physical 3×3 Rubik's Cube with a webcam
 and solves it with the Kociemba two-phase algorithm — wrapped in a real desktop-class UI.**
 
-`Python` · `OpenCV` · `NumPy` · `React` · `TypeScript` · `Socket programming`
+`Python` · `OpenCV` · `NumPy` · `PostgreSQL` · `SQLAlchemy` · `React` · `TypeScript` · `Socket programming`
 
 </div>
 
@@ -36,7 +36,8 @@ rotation arrows drawn over the live feed, and an analytics dashboard tracking ev
 | **Kociemba two-phase solver** | Pluggable backend: the native C extension when installed, otherwise Kociemba's own pure-Python implementation. Solutions are ≤ 20 moves, found in single-digit milliseconds. |
 | **Socket-based IPC** | The vision engine runs as its **own OS process** and publishes state and JPEG frames over a length-prefixed TCP protocol. The web server is a pure relay. |
 | **Real-time synchronisation** | One Socket.IO connection mirrors the engine snapshot into React. Every page reads the same state; every action is a single command going the other way. |
-| **Analytics** | Persisted solve history: move counts, search times, execution times, move distribution and running average sticker confidence. |
+| **Analytics** | Solve history in PostgreSQL: move counts, search times, execution times, move distribution and running average sticker confidence. |
+| **Database** | PostgreSQL (Neon) in production, SQLite locally, through SQLAlchemy. Alembic migrations run automatically at start-up. Reads are served from memory, so the camera loop never waits for the network; writes go to the database first. |
 | **Guided scanning** | Colour-only step guide; faces identified by their centre colour (no duplicates, any order); mirrored previews un-mirrored; orientation mistakes repaired by a smallest-change search that only applies unique fixes. |
 | **Plain-English moves** | A "hold the cube like this" step comes first; then every move says which way to turn, seen from where you are ("Turn the top layer to the left."), including back-layer moves. Arrows and instructions are checked against the cube model by tests. |
 | **Training-data collection** | Every sticker keeps its reading: colour, confidence, the best three colours, and whether the detector was unsure. Confirmed scans are saved as 54 labelled 32×32 sticker crops (`ml/data/`), balanced by design and with corrected stickers marked as hard examples. |
@@ -156,8 +157,9 @@ solving, solution generated, move executed, completed.
 
 ### 9 · Settings
 Camera device, resolution, FPS, detection geometry, overlay visibility, arrow style, playback
-speed, theme and the cube palette. Everything persists to `data/settings.json` and applies to
-the running engine immediately.
+speed, theme and the cube palette. Everything is saved in the database and applies to the
+running engine immediately. The Storage card shows which database is in use and whether it is
+reachable; if a change cannot be saved, a "Not saved" message says why.
 
 ![Settings](docs/screenshots/09-settings.png)
 
@@ -214,7 +216,7 @@ second machine unchanged.
 
 ```
 backend/
-  config.py            paths + persisted settings
+  config.py            paths, environment variables, the Settings model
   core/                pure domain logic — no OpenCV, no Flask, no sockets
     cube.py            CubeState: 54 facelets, move simulation, validation
     cubie.py           8 corners + 12 edges, twist / flip / parity, G1 check
@@ -222,7 +224,12 @@ backend/
     moves.py           Singmaster notation, metadata, plain-English instructions, physical turns
     scanning.py        scan guide, face identification, orientation repair
     solver.py          SolverEngine + pluggable Kociemba backends
-    color.py           HSV boxes, classification with confidence, profiles
+    color.py           HSV boxes, classification with confidence, built-in presets
+  db/
+    database.py        engine, transactions, connection status (no secrets shown)
+    models.py          the tables: app_settings, color_profiles, solves
+    migrate.py         runs Alembic migrations at start-up, retries while Neon wakes
+    migrations/        Alembic: env.py + versions/0001_initial_schema.py
   vision/
     camera.py          threaded capture, FPS, device enumeration
     detector.py        the HSV segmentation pipeline
@@ -233,7 +240,10 @@ backend/
     client.py          web-server-side client with auto-reconnect
   services/
     session.py         the state machine every UI page mirrors
+    settings.py        settings store (memory copy, written through to the database)
+    profiles.py        HSV profile store: built-in presets + user profiles
     analytics.py       solve history + aggregate statistics
+    legacy_import.py   one-time import of the pre-Phase-3 JSON files
     dataset.py         training-data collection (scans → labelled crops)
     logbus.py          structured ring-buffer log stream
   server/app.py        Flask + Socket.IO + MJPEG
@@ -252,6 +262,8 @@ tools/
   verify.py            end-to-end check of the whole pipeline
 
 python code files/     original CLI entry points, now thin wrappers over backend/
+
+alembic.ini            the alembic command line (the app itself does not need it)
 ```
 
 ---
@@ -276,14 +288,35 @@ mirror handling, orientation repair). The web app is the supported scanner.
 ```bash
 python -m pip install -r requirements-dev.txt   # app + pytest + Socket.IO client
 
-pytest                          # unit tests (about 30 s: scanning tests run the real detector)
+pytest                          # unit tests (about 40 s: scanning tests run the real detector)
 pytest -m "not slow"            # skip the solver tests
-python tools/verify.py          # end-to-end pipeline check (12 offline checks)
-python tools/verify.py --live   # + 6 checks against a running app (python run.py --headless)
+python tools/verify.py          # end-to-end pipeline check (13 offline checks)
+python tools/verify.py --live   # + 7 checks against a running app (python run.py --headless)
 ```
 
-The unit tests live in `tests/`. They never touch your real `data/` folder:
-`tests/conftest.py` points `CUBE_DATA_DIR` at a throwaway temp folder.
+The unit tests live in `tests/`. They never touch your real `data/` folder or a real database:
+`tests/conftest.py` points `CUBE_DATA_DIR` at a throwaway temp folder and ignores `DATABASE_URL`.
+
+Database tests run on SQLite. To run them on PostgreSQL as well, start a throwaway server in
+Docker and point `CUBE_TEST_POSTGRES_URL` at it (tests delete this app's tables there):
+
+```bash
+docker run -d --name cube-pg -p 5433:5432 -e POSTGRES_PASSWORD=cube pgvector/pgvector:pg17
+docker exec cube-pg psql -U postgres -c "CREATE DATABASE cube_test"
+CUBE_TEST_POSTGRES_URL=postgresql://postgres:cube@127.0.0.1:5433/cube_test pytest
+```
+
+### Database migrations
+
+The schema is versioned with Alembic. The engine applies new migrations when it starts, so
+there is nothing to run by hand. To change a table:
+
+1. change the class in `backend/db/models.py`;
+2. `python -m alembic revision --autogenerate --rev-id 0002 -m "what changed"`, then read and
+   tidy the generated file in `backend/db/migrations/versions/`;
+3. run `pytest`: `test_models_match_the_migrations` fails if the two disagree.
+
+Never edit a migration that has already run on Neon; add a new one.
 
 ---
 
@@ -295,8 +328,9 @@ python tools/verify.py
 
 Runs the whole stack headlessly and checks: cube-model correctness over random scrambles,
 solver output verified by replaying it, socket framing across split TCP chunks, HSV
-classification on a synthetic cube face, and a full scramble → solve → playback → analytics
-round trip over Socket.IO.
+classification on a synthetic cube face, database migrations and data surviving a restart,
+and a full scramble → solve → playback → analytics round trip over Socket.IO.
+`--live --expect-db postgresql` fails unless the running app uses PostgreSQL.
 
 Regenerate art and screenshots:
 
@@ -341,13 +375,17 @@ Analytics page. This is why the project has no hard dependency on a compiler.
 
 ## Configuration
 
-| File | Contents |
+| Where | Contents |
 |---|---|
-| `data/settings.json` | camera, detection, overlay, playback, theme |
-| `data/hsv_profiles.json` | user-saved HSV profiles |
-| `data/solve_history.json` | persisted solve records |
+| table `app_settings` | camera, detection, overlay, playback, theme |
+| table `color_profiles` | user-saved HSV profiles |
+| table `solves` | solve history |
 | `ml/data/scans/` | saved training scans (committed) |
 | `.cache/twophase/` | generated pruning tables (safe to delete; rebuilt on demand) |
+
+The database is `DATABASE_URL`: Neon PostgreSQL in production, and a local SQLite file
+(`data/cube.db`) when it is not set. The Settings page shows which one is in use. On the first
+start after Phase 3, the old `data/*.json` files are imported once and kept as `*.imported`.
 
 Ports, hosts, the secret key and the data folder come from environment variables - see
 [Environment variables](#environment-variables).
@@ -363,7 +401,7 @@ server (gunicorn).
 
 ```bash
 python -m pip install -r requirements-prod.txt   # adds the C solver (needs gcc) + gunicorn
-APP_ENV=production FLASK_SECRET_KEY=change-me python run.py --prod
+APP_ENV=production FLASK_SECRET_KEY=change-me DATABASE_URL='postgresql://...' python run.py --prod
 ```
 
 `run.py --prod` starts the engine and gunicorn (one worker with threads, see `gunicorn.conf.py`)
@@ -374,20 +412,26 @@ the platform restarts it. gunicorn does not run on Windows - use Docker or WSL t
 
 ```bash
 docker build -t cube-solver .
-docker run --rm -p 8000:8000 -e PORT=8000 -e FLASK_SECRET_KEY=dev cube-solver
+docker run --rm -p 8000:8000 -e PORT=8000 -e FLASK_SECRET_KEY=dev \
+  -e DATABASE_URL='postgresql://user:password@host/db' cube-solver
 ```
 
 Then open <http://127.0.0.1:8000>. The multi-stage build compiles the C solver in a build stage,
-so the final image contains only what runs.
+so the final image contains only what runs. Production refuses to start without `DATABASE_URL`:
+the container's disk is temporary, so a local file would silently lose all history.
 
 ### Render
 
 `render.yaml` is a Render Blueprint: one free Docker web service with a health check on
 `/api/health`. In Render choose **New → Blueprint**, pick this repository and click **Apply**.
-Render generates `FLASK_SECRET_KEY` and sets `PORT`.
+Render generates `FLASK_SECRET_KEY` and sets `PORT`. `DATABASE_URL` is a secret: add it in the
+service's **Environment** page (the Neon connection string of the `production` branch, with
+connection pooling off).
 
-The live demo has no webcam (use **Demo scramble**), sleeps after 15 minutes without traffic, and
-its disk is temporary, so solve history resets on every deploy.
+The live demo has no webcam (use **Demo scramble**) and sleeps after 15 minutes without traffic.
+Its disk is temporary, but settings, profiles and solve history are in Neon, so they survive
+every deploy. Neon's free database also sleeps after 5 idle minutes; the first query after that
+wakes it in about a second, and the engine retries while it does.
 
 ### Environment variables
 
@@ -402,6 +446,7 @@ win over it.
 | `CUBE_WEB_PORT` | `$PORT`, else `8000` | Render sets `PORT` |
 | `CUBE_ENGINE_HOST` / `CUBE_ENGINE_PORT` | `127.0.0.1` / `9999` | same |
 | `CUBE_ALLOWED_ORIGINS` | `*` | `*` (tightened in Phase 12) |
+| `DATABASE_URL` | not set: SQLite file `data/cube.db` | required: Neon connection string |
 | `CUBE_DATA_DIR` | `./data` | `./data` |
 | `CUBE_DATASET_ENABLED` | on | off |
 | `CUBE_DATASET_DIR` | `./ml/data` | `./ml/data` |
