@@ -180,7 +180,7 @@ database   Neon PostgreSQL in production · SQLite file data/cube.db locally (DA
 | 1 | Full cube validation: cubie model, twist / flip / parity, structured errors | ✅ |
 | 2 | Per-sticker detection data + dataset collection | ✅ |
 | 2B | Guided scanning: centre-based face identity, un-mirroring, orientation repair | ✅ |
-| 3 | Database: Neon Postgres, SQLAlchemy, Alembic, pgvector | ⬜ |
+| 3 | Database: Neon Postgres, SQLAlchemy, Alembic (pgvector available for Phase 7) | ✅ |
 | 4 | AI foundation: LLM client, tool registry, tracing, fallbacks | ⬜ |
 | 5 | Smart Repair Agent | ⬜ |
 | 6 | Beginner (layer-by-layer) solver + solution stages | ⬜ |
