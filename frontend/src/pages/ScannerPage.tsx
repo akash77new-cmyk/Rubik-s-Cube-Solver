@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Card, ProgressBar, Segmented, Tag, EmptyState } from "@/components/ui";
 import { CameraView, DetectionSummary } from "@/components/CameraView";
 import { CubeNet, FaceGrid } from "@/components/cube";
@@ -55,6 +55,51 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
   }
   const capture = manualCapture();
 
+  // When scanning starts, scroll so the camera and the guide fill the screen together.
+  const scanArea = useRef<HTMLDivElement>(null);
+  const previousMode = useRef(snapshot?.mode);
+  useEffect(() => {
+    if (snapshot?.mode === "scan" && previousMode.current !== "scan") {
+      scanArea.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    previousMode.current = snapshot?.mode;
+  }, [snapshot?.mode]);
+
+  // The one thing to do now, shown right under the guide's current step.
+  let guideAction = (
+    <Button variant="primary" icon={<IconScan size={16} />} onClick={() => send("scan.start")}>
+      Start scanning
+    </Button>
+  );
+  if (snapshot?.mode === "scan" && scan?.autoCapture) {
+    guideAction = (
+      <ProgressBar
+        value={hold}
+        label={
+          <>
+            <span>
+              {holdStep && hold > 0
+                ? `Hold still: capturing ${COLOR_NAMES[holdStep.center]}`
+                : `Hold a side still for ${holdSeconds} s to capture it`}
+            </span>
+            <b style={{ marginLeft: "auto", color: "var(--ink)" }}>{Math.round(hold * 100)}%</b>
+          </>
+        }
+      />
+    );
+  } else if (snapshot?.mode === "scan") {
+    guideAction = (
+      <Button
+        variant="primary"
+        icon={<IconTarget size={16} />}
+        disabled={!capture.ok}
+        onClick={() => send("scan.capture")}
+      >
+        {capture.label}
+      </Button>
+    );
+  }
+
   const counts = COLOR_CODES.reduce(
     (accumulator, code) => {
       accumulator[code] = 0;
@@ -72,7 +117,7 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
     <>
       <PageHead
         title="Scanning Pipeline"
-        description="Six sides, each recognised by its centre colour, so any order works. Each side is captured automatically once it's held still."
+        description="Six sides, each recognised by its centre colour, so any order works. Press Capture for each side, or switch to Auto to capture a side once it's held still."
         actions={
           <>
             <Segmented
@@ -107,9 +152,11 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
                 ? validation?.ok
                   ? "All six faces captured and the cube state is valid."
                   : "All faces captured, but the state is not solvable — fix the highlighted colours."
-                : snapshot?.mode === "scan"
-                  ? "Follow the guide below: each side is captured automatically."
-                  : "Press Start scanning, then follow the guide below."}
+                : snapshot?.mode !== "scan"
+                  ? "Press Start scanning, then follow the guide beside the camera."
+                  : scan?.autoCapture
+                    ? "Follow the guide: each side is captured once it's held still."
+                    : "Follow the guide and press Capture for each side."}
             </p>
           </div>
           {complete && (
@@ -130,7 +177,7 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
       </Card>
 
       {/* Live camera + guide, side by side so both stay in view ------- */}
-      <div className="split scan-split">
+      <div className="split scan-split" ref={scanArea}>
         <Card className="card-pad-0">
           <CameraView
             showScanline={snapshot?.mode === "scan"}
@@ -156,43 +203,21 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
         <div className="scan-side">
           {!complete && (
             <Card title="Scan guide" description="Show each side to the camera, as pictured">
-              <ScanGuide scan={scan} palette={settings?.cube_palette} />
-              {holding && (
-                <ProgressBar
-                  value={hold}
-                  label={
-                    <>
-                      <span>
-                        {holdStep && hold > 0
-                          ? `Hold still: capturing ${COLOR_NAMES[holdStep.center]}`
-                          : `Hold a side still for ${holdSeconds} s to capture it`}
-                      </span>
-                      <b style={{ marginLeft: "auto", color: "var(--ink)" }}>{Math.round(hold * 100)}%</b>
-                    </>
-                  }
-                />
-              )}
-              {snapshot?.mode === "scan" && !scan?.autoCapture && (
-                <div className="scan-capture">
-                  <Button variant="primary" disabled={!capture.ok} onClick={() => send("scan.capture")}>
-                    {capture.label}
-                  </Button>
-                </div>
-              )}
+              <ScanGuide scan={scan} palette={settings?.cube_palette} action={guideAction} />
             </Card>
           )}
 
           <Card
-            title="Capture"
-            description="Manual override when auto-capture is off"
+            title="Live read"
+            description="What the camera sees right now"
             actions={
               <Button
                 size="sm"
-                variant="primary"
                 disabled={!snapshot?.camera.running || complete}
                 onClick={() => send("scan.capture")}
+                title="Capture even if the read is not steady yet (e.g. a logo hides the centre)"
               >
-                Capture face
+                Capture anyway
               </Button>
             }
           >

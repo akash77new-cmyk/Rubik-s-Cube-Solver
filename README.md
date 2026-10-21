@@ -102,9 +102,9 @@ A scan guide shows each step with colours only: green facing the camera with whi
 then red, blue and orange, then white (blue on top) and yellow (green on top). Each side is
 recognised by its centre colour, so it is captured once, in any order. A mirrored camera
 preview is handled, and a side held the wrong way up is repaired automatically when the fix is
-unique. The guide sits beside the camera. Capture is manual by default: the guide's button names
-the side it will store and turns on only for a steady, confident read of a side that still needs
-scanning. In Auto mode a side is captured once it has been held still for a moment (1 s by
+unique. The guide sits beside the camera, with its one action right under the current step
+(Start scanning, then Capture). Capture is manual by default: the button names the side it will
+store and turns on only for a steady, confident read of a side that still needs scanning. In Auto mode a side is captured once it has been held still for a moment (1 s by
 default, adjustable in Settings), and a "Hold still" bar shows the progress.
 
 Each face tile fills in as it lands, and full validation (colours, pieces, twist, flip, parity)
@@ -128,7 +128,8 @@ the first move, a picture shows how to hold the cube (green facing you, white on
 instruction is from that position, and the cube is never turned around. Each move is written in
 plain English, e.g. *R: "Turn the right side up, away from you."* and *B: "Turn the back layer,
 the side facing away from you: its top moves to the left."* Auto play shows each move for 8 s
-(adjustable). "Camera guidance" overlays the hold picture, then each arrow and instruction, onto
+(adjustable), with a time bar and timer that restart for every move. A solved cube glows and
+gets a burst of cube-coloured confetti. "Camera guidance" overlays the hold picture, then each arrow and instruction, onto
 the live feed instead.
 
 ![Solution](docs/screenshots/05-solution.png)

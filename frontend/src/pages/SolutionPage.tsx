@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Button, Card, EmptyState, KeyValue, ProgressBar, SliderRow, Tag } from "@/components/ui";
 import { Cube3D, SOLVED_FACELETS } from "@/components/cube";
 import { CameraView } from "@/components/CameraView";
@@ -14,6 +14,7 @@ import {
   IconPrev,
   IconRestart,
   IconRoute,
+  IconScan,
   IconShuffle,
 } from "@/components/Icons";
 import { useApp } from "@/state/AppStore";
@@ -43,6 +44,65 @@ function HoldFigure({
         ))}
       </div>
       <span className="hold-figure-caption">{COLOR_NAMES[front]} facing you</span>
+    </div>
+  );
+}
+
+/**
+ * Auto play's time bar for the current move: it fills from 0 to `seconds` while a timer
+ * counts up, and starts again from 0 for every move (`stepKey` changes) and whenever auto
+ * play starts. The backend waits exactly `seconds` per move, so both stay in step. The
+ * component keeps its own state, so only this bar re-renders on every animation frame.
+ */
+function StepTimer({ running, stepKey, seconds }: { running: boolean; stepKey: number; seconds: number }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    setElapsed(0);
+    if (!running) return undefined;
+    const start = performance.now();
+    let frame = 0;
+    const tick = () => {
+      setElapsed(Math.min((performance.now() - start) / 1000, seconds));
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [running, stepKey, seconds]);
+
+  return (
+    <div className="step-timer" data-running={running}>
+      <div className="step-timer-head">
+        <span>{running ? "Time for this move" : "Auto play is off"}</span>
+        <b>{running ? `${elapsed.toFixed(1)} s / ${seconds} s` : `${seconds} s per move`}</b>
+      </div>
+      <div className="step-timer-track">
+        <div className="step-timer-fill" style={{ width: `${(elapsed / seconds) * 100}%` }} />
+      </div>
+    </div>
+  );
+}
+
+/** A one-off burst of cube-coloured confetti when the cube is solved (plain CSS: each
+ *  piece gets its own position, colour, delay, speed, drift and spin). */
+function Confetti({ paint }: { paint: (code: ColorCode) => string }) {
+  const colours: ColorCode[] = ["W", "Y", "R", "O", "G", "B"];
+  return (
+    <div className="confetti" aria-hidden="true">
+      {Array.from({ length: 36 }, (_, i) => (
+        <span
+          key={i}
+          style={
+            {
+              left: `${(i * 37) % 100}%`,
+              background: paint(colours[i % 6]),
+              "--delay": `${(i % 9) * 0.09}s`,
+              "--dur": `${2.2 + (i % 5) * 0.3}s`,
+              "--drift": `${((i % 7) - 3) * 18}px`,
+              "--spin": `${(i * 47) % 360}deg`,
+            } as CSSProperties
+          }
+        />
+      ))}
     </div>
   );
 }
@@ -150,7 +210,8 @@ export default function SolutionPage({ navigate }: { navigate: (page: PageId) =>
 
       {/* Player -------------------------------------------------------- */}
       <div className="split">
-        <Card className="player-card">
+        <Card className={playback?.completed ? "player-card is-solved" : "player-card"}>
+          {playback?.completed && <Confetti paint={paint} />}
           {ready && (
             <p className="hold-note">
               Hold the cube with {centreDot("F")} <b>{centreName("F", "the front")}</b> facing you and{" "}
@@ -194,12 +255,30 @@ export default function SolutionPage({ navigate }: { navigate: (page: PageId) =>
                     <p className="move-hero-label">
                       {centreDot(playback.current.face)} {playback.current.label}
                     </p>
+                    <StepTimer
+                      running={Boolean(playback.playing)}
+                      stepKey={index}
+                      seconds={(settings?.autoplay_interval_ms ?? 8000) / 1000}
+                    />
                   </>
                 ) : (
                   <>
-                    <IconCheck size={44} />
-                    <div className="move-hero-notation">Done</div>
-                    <p style={{ fontSize: 12.5, color: "var(--ink-2)" }}>Cube solved</p>
+                    <span className="solved-badge">
+                      <IconCheck size={38} />
+                    </span>
+                    <div className="solved-title">Cube solved!</div>
+                    <p className="move-hero-label">All {total} moves done. Nice work!</p>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={<IconScan size={14} />}
+                      onClick={() => {
+                        send("scan.reset");
+                        navigate("scanner");
+                      }}
+                    >
+                      Scan another cube
+                    </Button>
                   </>
                 )}
               </div>

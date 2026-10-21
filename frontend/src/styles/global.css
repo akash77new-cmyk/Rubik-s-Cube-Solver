@@ -1691,10 +1691,17 @@ select { cursor: pointer; }
 @media (max-width: 1180px) { .split.scan-split { grid-template-columns: minmax(0, 1fr) 300px; } }
 @media (max-width: 760px) { .split.scan-split { grid-template-columns: minmax(0, 1fr); } }
 .scan-side { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
-.scan-side .scan-guide { margin-bottom: var(--sp-3); }
-.scan-side .scan-guide-now { gap: var(--sp-4); }
-.scan-side .scan-guide-face { width: 96px; }
-.scan-side .scan-guide-title { font-size: 17px; }
+/* Compact guide beside the camera: picture next to the step, so the guide and its
+   action button fit on short laptop screens together with the camera. */
+.scan-side .scan-guide-now { gap: var(--sp-4); flex-wrap: nowrap; align-items: flex-start; }
+.scan-side .scan-guide-face { width: 76px; flex: none; }
+.scan-side .scan-guide-top { padding: 2px 4px; font-size: 9.5px; }
+.scan-side .scan-guide-title { font-size: 16px; }
+.scan-side .scan-guide-steps { gap: 6px; }
+.scan-side .scan-guide-steps li { padding: 3px 8px 3px 3px; font-size: 11.5px; }
+.scan-side .scan-guide-dot { width: 16px; height: 16px; font-size: 10px; }
+.scan-guide-action { display: flex; flex-direction: column; }
+.scan-guide-action > .btn { width: 100%; height: 44px; font-size: 14px; }
 .dataset-blocker { color: var(--status-warning); font-weight: 600; }
 .hold-note { margin-bottom: var(--sp-3); font-size: 12.5px; line-height: 1.7; color: var(--ink-2); }
 .hold-note b { color: var(--ink); }
@@ -1709,5 +1716,50 @@ select { cursor: pointer; }
 .move-hero-label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); }
 .hold-figure { width: 120px; }
 .hold-figure-caption { text-align: center; font-size: 11px; font-weight: 700; color: var(--ink-2); }
-.scan-capture { display: flex; margin-top: var(--sp-3); }
-.scan-capture > * { flex: 1; }
+
+/* ---- Auto play time bar ---------------------------------------------------- */
+.step-timer { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 6px; margin-top: var(--sp-2); }
+.step-timer-head { display: flex; gap: 8px; font-size: 11.5px; color: var(--ink-3); }
+.step-timer-head b { margin-left: auto; font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.step-timer[data-running="false"] .step-timer-head b { color: var(--ink-3); }
+.step-timer-track { height: 8px; border-radius: 999px; background: var(--hairline); overflow: hidden; }
+.step-timer-fill {
+  height: 100%; border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand-2), var(--brand), var(--brand-2));
+  background-size: 200% 100%; box-shadow: 0 0 12px var(--brand-glow);
+}
+.step-timer[data-running="true"] .step-timer-fill { animation: timer-shimmer 1.4s linear infinite; }
+@keyframes timer-shimmer { from { background-position: 0% 0; } to { background-position: -200% 0; } }
+
+/* ---- Solved celebration ---------------------------------------------------- */
+.player-card { position: relative; }
+.player-card.is-solved .player-stage > :first-child { animation: solved-glow 2.4s ease-in-out infinite; }
+@keyframes solved-glow {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(34, 197, 94, 0.45)); }
+  50% { filter: drop-shadow(0 0 32px rgba(34, 197, 94, 0.9)) drop-shadow(0 0 56px var(--brand-glow)); }
+}
+.solved-badge {
+  width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  background: radial-gradient(circle at 35% 30%, #4ade80, #15803d);
+  animation: solved-pop 600ms var(--ease) both, solved-ring 1.8s ease-out 600ms infinite;
+}
+@keyframes solved-pop { from { transform: scale(0.3); opacity: 0; } 70% { transform: scale(1.12); } to { transform: scale(1); opacity: 1; } }
+@keyframes solved-ring { from { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); } to { box-shadow: 0 0 0 22px rgba(34, 197, 94, 0); } }
+.solved-title {
+  font-size: 26px; font-weight: 800; letter-spacing: -0.02em;
+  background: linear-gradient(90deg, #4ade80, var(--brand-2)); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 3; border-radius: inherit; }
+.confetti span {
+  position: absolute; top: -16px; width: 9px; height: 14px; border-radius: 2px; opacity: 0;
+  animation: confetti-fall var(--dur) ease-in var(--delay) forwards;
+}
+@keyframes confetti-fall {
+  0% { opacity: 1; transform: translate(0, 0) rotate(var(--spin)); }
+  85% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--drift), 640px) rotate(calc(var(--spin) + 540deg)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confetti { display: none; }
+  .player-card.is-solved .player-stage > :first-child, .solved-badge, .step-timer-fill { animation: none; }
+}
