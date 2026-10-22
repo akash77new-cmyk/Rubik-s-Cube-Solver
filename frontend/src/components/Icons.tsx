@@ -225,6 +225,30 @@ export const IconDatabase = (p: IconProps) => (
   </Icon>
 );
 
+export const IconGraduation = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="m2.5 9 9.5-4.5L21.5 9 12 13.5 2.5 9Z" />
+    <path d="M6.5 11v4.5c1.4 1.3 3.3 2 5.5 2s4.1-.7 5.5-2V11" />
+    <path d="M21.5 9v5" />
+  </Icon>
+);
+
+export const IconUndo = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M9 14 4 9l5-5" />
+    <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+  </Icon>
+);
+
+export const IconFlip = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 3a9 9 0 0 1 8.5 6" />
+    <path d="m21 4-.5 5-5-.5" />
+    <path d="M12 21a9 9 0 0 1-8.5-6" />
+    <path d="m3 20 .5-5 5 .5" />
+  </Icon>
+);
+
 export const IconBook = (p: IconProps) => (
   <Icon {...p}>
     <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15Z" />

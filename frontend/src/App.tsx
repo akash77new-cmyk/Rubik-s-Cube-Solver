@@ -14,6 +14,7 @@ import LogsPage from "@/pages/LogsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import AssistantPage from "@/pages/AssistantPage";
 import LessonsPage from "@/pages/LessonsPage";
+import LearnPage from "@/pages/LearnPage";
 
 const PAGES: Record<PageId, (props: { navigate: (page: PageId) => void }) => ReactElement> = {
   dashboard: DashboardPage,
@@ -27,6 +28,7 @@ const PAGES: Record<PageId, (props: { navigate: (page: PageId) => void }) => Rea
   settings: SettingsPage,
   assistant: AssistantPage,
   lessons: LessonsPage,
+  learn: LearnPage,
 };
 
 const VALID_PAGES = new Set(Object.keys(PAGES) as PageId[]);

@@ -55,6 +55,11 @@ const CAPABILITIES: { title: string; detail: string }[] = [
     detail:
       "Lessons embedded with Gemini and stored in PostgreSQL with pgvector; the coach answers only from the sections it retrieved, and every citation is checked.",
   },
+  {
+    title: "Solve & Learn",
+    detail:
+      "The beginner method on your own cube, in seven stages: code finds every step and its moves, an AI tutor gives hints and answers why, and any moves it writes must come from the app.",
+  },
 ];
 
 export function AboutDialog({ onClose }: { onClose: () => void }) {

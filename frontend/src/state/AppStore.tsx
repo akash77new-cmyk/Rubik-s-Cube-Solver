@@ -201,6 +201,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     socket.on("ai:rejected", (data: { message: string }) =>
       pushToast({ tone: "warning", title: "Assistant", message: data.message }),
     );
+    socket.on("learn:rejected", (data: { message: string }) =>
+      pushToast({ tone: "warning", title: "Solve & Learn", message: data.message }),
+    );
     socket.on("engine:disconnected", () =>
       pushToast({ tone: "warning", title: "Vision engine disconnected" }),
     );

@@ -128,6 +128,8 @@ export interface Cube3DProps {
   durationMs?: number;
   palette?: Partial<Record<ColorCode, string>>;
   highlightFace?: FaceKey | null;
+  /** Sticker keys like "U7" (face + 0-based index) to keep bright; the rest are dimmed. */
+  highlight?: ReadonlySet<string> | null;
   onStickerClick?: (face: FaceKey, index: number) => void;
 }
 
@@ -142,6 +144,7 @@ export function Cube3D({
   durationMs = 420,
   palette,
   highlightFace = null,
+  highlight = null,
   onStickerClick,
 }: Cube3DProps) {
   const [rotation, setRotation] = useState({ x: -24, y: -32 });
@@ -281,7 +284,7 @@ export function Cube3D({
       {visibleFaces(cubie).map((face) => {
         const index = faceletIndex(face, cubie);
         const code = rendered[face]?.[index];
-        const dim = highlightFace ? face !== highlightFace : false;
+        const dim = highlight ? !highlight.has(`${face}${index}`) : highlightFace ? face !== highlightFace : false;
         return (
           <div
             key={face}

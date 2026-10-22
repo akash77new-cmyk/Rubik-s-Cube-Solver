@@ -11,6 +11,7 @@ import { ColorSummary } from "@/components/charts";
 import {
   IconAlert,
   IconCheck,
+  IconGraduation,
   IconRestart,
   IconRoute,
   IconScan,
@@ -162,18 +163,31 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
             </p>
           </div>
           {complete && (
-            <Button
-              variant="primary"
-              icon={<IconRoute size={16} />}
-              disabled={!validation?.ok || snapshot?.solving}
-              loading={snapshot?.solving}
-              onClick={() => {
-                send("solve.run");
-                navigate("solution");
-              }}
-            >
-              Solve this cube
-            </Button>
+            <div className="btn-row">
+              <Button
+                variant="primary"
+                icon={<IconRoute size={16} />}
+                disabled={!validation?.ok || snapshot?.solving}
+                loading={snapshot?.solving}
+                onClick={() => {
+                  send("solve.run");
+                  navigate("solution");
+                }}
+              >
+                Solve this cube
+              </Button>
+              <Button
+                icon={<IconGraduation size={16} />}
+                disabled={!validation?.ok}
+                title="Solve it yourself, stage by stage, with the AI tutor"
+                onClick={() => {
+                  send("learn.start");
+                  navigate("learn");
+                }}
+              >
+                Solve & Learn
+              </Button>
+            </div>
           )}
         </div>
       </Card>
@@ -341,9 +355,14 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
               title="Cube state is valid"
               message="Every piece is real, and twist, flip and parity all check out."
               action={
-                <Button variant="primary" onClick={() => { send("solve.run"); navigate("solution"); }}>
-                  Solve now
-                </Button>
+                <div className="btn-row" style={{ justifyContent: "center" }}>
+                  <Button variant="primary" onClick={() => { send("solve.run"); navigate("solution"); }}>
+                    Solve now
+                  </Button>
+                  <Button icon={<IconGraduation size={16} />} onClick={() => { send("learn.start"); navigate("learn"); }}>
+                    Solve & Learn
+                  </Button>
+                </div>
               }
             />
           ) : (

@@ -326,7 +326,108 @@ export interface Snapshot {
   database: DatabaseInfo | null;
   ai: AIStatus | null;
   repair: RepairInfo | null;
+  /** Solve & Learn (Phase 8), or null when not learning */
+  learn: LearnState | null;
   timestamp: number;
+}
+
+/* ------------------------------------------------------------------ Solve & Learn (Phase 8) */
+
+/** One stage of the beginner method, with how the learner did (backend/services/learn.py). */
+export interface LearnStage {
+  number: number;
+  name: string;
+  goal: string;
+  learned: string;
+  /** The colour on top while doing this stage */
+  top: ColorCode;
+  /** The lesson section that teaches it */
+  lesson: string;
+  done: boolean;
+  current: boolean;
+  hints: number;
+  shown: number;
+  moves: number;
+  /** Done without hints or "Show me" */
+  alone: boolean;
+}
+
+/** The next step. Algorithm and moves are only sent once a hint reveals them. */
+export interface LearnStep {
+  stage: number;
+  kind: "moves" | "turn_over";
+  task: string;
+  piece: string | null;
+  /** Sticker keys to highlight on the 3D cube, e.g. "U7" */
+  focus: string[];
+  how?: string;
+  algorithm?: string | null;
+  algorithmNotation?: string | null;
+  moves?: MoveInfo[];
+  notation?: string;
+}
+
+export interface LearnHint {
+  level: number;
+  text: string;
+  /** "built-in" at first, then "gemini" (or "fallback") when the tutor answers */
+  source: string;
+  model: string | null;
+}
+
+/** The tutor's answer to a "why?" question, or its recap. */
+export interface TutorAnswer {
+  kind: "question" | "recap";
+  question?: string | null;
+  message: string;
+  citations?: string[];
+  sources?: CoachSource[];
+  source: string;
+  model: string | null;
+  reason?: string | null;
+}
+
+export interface LearnState {
+  id: string;
+  /** True once the learner holds the cube as shown */
+  ready: boolean;
+  /** 1-7, or 8 when solved */
+  stage: number;
+  solved: boolean;
+  top: ColorCode;
+  front: ColorCode;
+  cube: Facelets;
+  /** Grows with every change; the 3D cube animates each move once */
+  version: number;
+  previous: Facelets | null;
+  lastMove: MoveInfo | null;
+  lastAction: string | null;
+  moveCount: number;
+  history: string[];
+  stages: LearnStage[];
+  step: LearnStep | null;
+  hintLevel: number;
+  hints: LearnHint[];
+  /** Moves still to do from "Show me" */
+  guide: MoveInfo[];
+  /** All the moves that were shown, and what they do (while guiding) */
+  guideAll: MoveInfo[];
+  guideTask: string | null;
+  note: string | null;
+  justDone: { number: number; name: string; learned: string } | null;
+  answer: TutorAnswer | null;
+  recap: TutorAnswer | null;
+  stats: {
+    moves: number;
+    stagesAlone: string[];
+    stagesWithHelp: string[];
+    hints: number;
+    shown: number;
+    seconds: number;
+    /** The stage that needed the most help */
+    practise: string | null;
+  };
+  tutorBusy: boolean;
 }
 
 /** One sticker change of a repair proposal (computed by code, never by the model). */

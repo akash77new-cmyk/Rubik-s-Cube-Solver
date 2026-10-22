@@ -11,6 +11,7 @@ import {
   IconCube,
   IconDashboard,
   IconDroplet,
+  IconGraduation,
   IconInfo,
   IconMenu,
   IconMoon,
@@ -33,7 +34,8 @@ export type PageId =
   | "logs"
   | "settings"
   | "assistant"
-  | "lessons";
+  | "lessons"
+  | "learn";
 
 export const NAV: {
   group: string;
@@ -59,6 +61,7 @@ export const NAV: {
     items: [
       { id: "viewer", label: "Cube Viewer", icon: <IconCube />, hint: "Live cube state" },
       { id: "solution", label: "Solution", icon: <IconRoute />, hint: "Move-by-move player" },
+      { id: "learn", label: "Solve & Learn", icon: <IconGraduation />, hint: "Beginner method, with a tutor" },
     ],
   },
   {
@@ -89,6 +92,7 @@ export const PAGE_META: Record<PageId, { title: string; subtitle: string }> = {
   settings: { title: "Settings", subtitle: "Camera, overlays, playback and appearance" },
   assistant: { title: "AI Assistant", subtitle: "Ask about your cube, your solution and your solves" },
   lessons: { title: "Lessons & Coach", subtitle: "Short lessons, and a coach that answers from them" },
+  learn: { title: "Solve & Learn", subtitle: "Solve your own cube with the beginner method and an AI tutor" },
 };
 
 /* ------------------------------------------------------------------ */
