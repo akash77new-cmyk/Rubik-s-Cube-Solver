@@ -36,6 +36,11 @@ DATASET_DIR = Path(os.environ.get("CUBE_DATASET_DIR") or PROJECT_ROOT / "ml" / "
 #: Local development database (used when DATABASE_URL is not set).
 DEFAULT_SQLITE_FILE = DATA_DIR / "cube.db"
 
+#: Gemini model for the AI features (Phase 4): Google's suggestion for new projects
+#: in Oct 2026 - fast, cheap, and on the free tier. Change it with GEMINI_MODEL.
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+THINKING_LEVELS = ("minimal", "low", "medium", "high")
+
 for _directory in (DATA_DIR, CACHE_DIR, SOLVER_TABLE_DIR):
     _directory.mkdir(parents=True, exist_ok=True)
 
@@ -62,6 +67,13 @@ class RuntimeConfig:
     allowed_origins: Union[str, List[str]]    # "*" or a list of origins
     dataset_enabled: bool                     # may scans be saved as training data?
     database_url: str = field(repr=False)     # SQLAlchemy URL; may contain a password
+    # AI (Phase 4). Without a key, every AI feature gives its built-in answer.
+    gemini_api_key: str = field(repr=False)   # a secret, like the database URL
+    gemini_model: str
+    gemini_base_url: str                      # "" = Google's; tests may point it elsewhere
+    gemini_thinking_level: str                # "" = the model's default
+    ai_requests_per_minute: int               # the app's own limits, below Google's
+    ai_requests_per_day: int
 
     @property
     def is_production(self) -> bool:
@@ -84,6 +96,20 @@ def normalize_database_url(raw: str) -> str:
     raise ConfigError(
         "DATABASE_URL must start with postgresql:// (Neon's connection string) or sqlite://"
     )
+
+
+def _count(env: Mapping[str, str], name: str, default: int) -> int:
+    """A whole number >= 0 from the environment, or ``default`` if not set."""
+    raw = (env.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ConfigError(f"{name} must be a whole number, got {raw!r}") from None
+    if value < 0:
+        raise ConfigError(f"{name} must be 0 or more, got {value}")
+    return value
 
 
 def read_runtime_config(env: Mapping[str, str]) -> RuntimeConfig:
@@ -129,6 +155,10 @@ def read_runtime_config(env: Mapping[str, str]) -> RuntimeConfig:
         raw_database_url = f"sqlite:///{DEFAULT_SQLITE_FILE.as_posix()}"
     database_url = normalize_database_url(raw_database_url)
 
+    thinking_level = (env.get("GEMINI_THINKING_LEVEL") or "").strip().lower()
+    if thinking_level and thinking_level not in THINKING_LEVELS:
+        raise ConfigError(f"GEMINI_THINKING_LEVEL must be one of {', '.join(THINKING_LEVELS)} (or empty)")
+
     return RuntimeConfig(
         app_env=app_env,
         web_host=env.get("CUBE_WEB_HOST") or ("0.0.0.0" if production else "127.0.0.1"),
@@ -140,6 +170,12 @@ def read_runtime_config(env: Mapping[str, str]) -> RuntimeConfig:
         allowed_origins=origins,
         dataset_enabled=dataset_enabled,
         database_url=database_url,
+        gemini_api_key=(env.get("GEMINI_API_KEY") or "").strip(),
+        gemini_model=(env.get("GEMINI_MODEL") or "").strip() or DEFAULT_GEMINI_MODEL,
+        gemini_base_url=(env.get("GEMINI_BASE_URL") or "").strip(),
+        gemini_thinking_level=thinking_level,
+        ai_requests_per_minute=_count(env, "AI_REQUESTS_PER_MINUTE", 10),
+        ai_requests_per_day=_count(env, "AI_REQUESTS_PER_DAY", 200),
     )
 
 

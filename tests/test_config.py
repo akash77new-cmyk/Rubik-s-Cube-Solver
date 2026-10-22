@@ -11,6 +11,7 @@ import pytest
 from backend.config import (
     DATA_DIR,
     DATASET_DIR,
+    DEFAULT_GEMINI_MODEL,
     DEFAULT_SQLITE_FILE,
     ConfigError,
     normalize_database_url,
@@ -126,3 +127,38 @@ def test_production_requires_database_url():
 def test_secrets_never_appear_in_the_config_repr():
     config = read_runtime_config({"DATABASE_URL": NEON, "FLASK_SECRET_KEY": "top-secret"})
     assert "s3cret" not in repr(config) and "top-secret" not in repr(config)
+
+
+# --- AI settings (Phase 4) --------------------------------------------------------
+def test_ai_is_optional_with_safe_defaults():
+    config = read_runtime_config(PRODUCTION)  # production works without a Gemini key
+    assert config.gemini_api_key == ""
+    assert config.gemini_model == DEFAULT_GEMINI_MODEL
+    assert (config.gemini_base_url, config.gemini_thinking_level) == ("", "")
+    assert (config.ai_requests_per_minute, config.ai_requests_per_day) == (10, 200)
+
+
+def test_ai_settings_from_the_environment():
+    config = read_runtime_config(
+        {
+            "GEMINI_API_KEY": " key-123 ",
+            "GEMINI_MODEL": "gemini-3.8-flash",
+            "GEMINI_THINKING_LEVEL": "LOW",
+            "AI_REQUESTS_PER_MINUTE": "5",
+            "AI_REQUESTS_PER_DAY": "0",
+        }
+    )
+    assert (config.gemini_api_key, config.gemini_model, config.gemini_thinking_level) == (
+        "key-123", "gemini-3.8-flash", "low",
+    )
+    assert (config.ai_requests_per_minute, config.ai_requests_per_day) == (5, 0)
+    assert "key-123" not in repr(config)
+
+
+def test_bad_ai_settings_are_refused():
+    with pytest.raises(ConfigError, match="GEMINI_THINKING_LEVEL"):
+        read_runtime_config({"GEMINI_THINKING_LEVEL": "extreme"})
+    with pytest.raises(ConfigError, match="AI_REQUESTS_PER_DAY must be a whole number"):
+        read_runtime_config({"AI_REQUESTS_PER_DAY": "lots"})
+    with pytest.raises(ConfigError, match="AI_REQUESTS_PER_MINUTE must be 0 or more"):
+        read_runtime_config({"AI_REQUESTS_PER_MINUTE": "-1"})
