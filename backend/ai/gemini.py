@@ -103,9 +103,13 @@ class GeminiClient:
 
     # ------------------------------------------------------------------
     def generate(self, request: LLMRequest) -> LLMResponse:
-        url = f"{self.base_url}/models/{self.model}:generateContent"
+        return self.parse_response(self._post("generateContent", self.build_body(request)))
+
+    def _post(self, method: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """POST to ``models/{model}:{method}`` and return the JSON answer, or raise an LLMError."""
+        url = f"{self.base_url}/models/{self.model}:{method}"
         headers = {"Content-Type": "application/json", "x-goog-api-key": self._api_key}
-        body = json.dumps(self.build_body(request)).encode("utf-8")
+        body = json.dumps(payload).encode("utf-8")
 
         for attempt in range(self.retries + 1):
             try:
@@ -115,10 +119,9 @@ class GeminiClient:
             else:
                 if status == 200:
                     try:
-                        payload = json.loads(raw.decode("utf-8"))
+                        return json.loads(raw.decode("utf-8"))
                     except ValueError as exc:
                         raise LLMBadResponse(f"Gemini sent invalid JSON: {exc}") from exc
-                    return self.parse_response(payload)
                 error = self._error_for(status, raw)
             # Only "temporarily unavailable" is worth one more try.
             if not isinstance(error, LLMUnavailable) or attempt == self.retries:
@@ -215,3 +218,53 @@ class GeminiClient:
         if status >= 500:
             return LLMUnavailable(f"Gemini is unavailable (HTTP {status}): {detail}")
         return LLMError(f"Unexpected answer from Gemini (HTTP {status}): {detail}")
+
+
+class GeminiEmbedder(GeminiClient):
+    """Gemini's embedding model (Phase 7): text in, a list of numbers out.
+
+    Texts with similar meaning get vectors that point in similar directions, so "How do I
+    turn the back?" finds the notation lesson even without sharing a word with it.
+
+        POST {base_url}/models/{model}:batchEmbedContents
+        {"requests": [{"model": "models/{model}", "content": {"parts": [{"text": "..."}]},
+                       "taskType": "RETRIEVAL_DOCUMENT", "outputDimensionality": 768}, ...]}
+        -> {"embeddings": [{"values": [0.012, -0.03, ...]}, ...]}  (same order as sent)
+    """
+
+    BATCH = 50  # texts per request
+
+    def __init__(self, api_key: str, model: str, dimensions: int = 768, **kwargs: Any) -> None:
+        super().__init__(api_key, model, **kwargs)
+        self.dimensions = dimensions
+
+    def embed(self, texts: List[str], task: str) -> List[List[float]]:
+        """One unit-length vector per text. ``task``: RETRIEVAL_DOCUMENT or RETRIEVAL_QUERY."""
+        vectors: List[List[float]] = []
+        for start in range(0, len(texts), self.BATCH):
+            batch = texts[start:start + self.BATCH]
+            requests = [
+                {
+                    "model": f"models/{self.model}",
+                    "content": {"parts": [{"text": text}]},
+                    "taskType": task,
+                    "outputDimensionality": self.dimensions,
+                }
+                for text in batch
+            ]
+            answer = self._post("batchEmbedContents", {"requests": requests})
+            embeddings = answer.get("embeddings") or []
+            if len(embeddings) != len(batch):
+                raise LLMBadResponse(f"Gemini returned {len(embeddings)} embeddings for {len(batch)} texts")
+            for embedding in embeddings:
+                values = [float(x) for x in embedding.get("values") or []]
+                if len(values) != self.dimensions:
+                    raise LLMBadResponse(f"Gemini returned an embedding of size {len(values)}, not {self.dimensions}")
+                vectors.append(unit(values))
+        return vectors
+
+
+def unit(values: List[float]) -> List[float]:
+    """Scale a vector to length 1. Shortened Gemini embeddings (768 of 3072 numbers) are not."""
+    length = sum(x * x for x in values) ** 0.5
+    return [x / length for x in values] if length else values

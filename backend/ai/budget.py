@@ -13,9 +13,9 @@ from __future__ import annotations
 import threading
 import time
 from collections import deque
-from typing import Callable, Deque, Dict, Iterable, Optional
+from typing import Callable, Deque, Dict, Iterable, List, Optional
 
-from backend.ai.llm import LLMBudgetExceeded, LLMClient, LLMRequest, LLMResponse
+from backend.ai.llm import Embedder, LLMBudgetExceeded, LLMClient, LLMRequest, LLMResponse
 
 MINUTE = 60.0
 DAY = 24 * 60 * 60.0
@@ -79,3 +79,18 @@ class BudgetedLLM:
         if refusal is not None:
             raise LLMBudgetExceeded(refusal)
         return self._llm.generate(request)
+
+
+class BudgetedEmbedder:
+    """Wraps an ``Embedder`` the same way: one embedding request = one request of the budget."""
+
+    def __init__(self, embedder: Embedder, budget: RequestBudget) -> None:
+        self._embedder = embedder
+        self._budget = budget
+        self.model = embedder.model
+
+    def embed(self, texts: List[str], task: str) -> List[List[float]]:
+        refusal = self._budget.try_acquire()
+        if refusal is not None:
+            raise LLMBudgetExceeded(refusal)
+        return self._embedder.embed(texts, task)

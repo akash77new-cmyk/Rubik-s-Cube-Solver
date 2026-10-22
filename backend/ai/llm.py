@@ -157,3 +157,13 @@ class LLMClient(Protocol):
     def generate(self, request: LLMRequest) -> LLMResponse:
         """One request to the model. Raises an ``LLMError`` subclass on failure."""
         ...
+
+
+class Embedder(Protocol):
+    """What the RAG coach needs from an embedding model (Phase 7)."""
+
+    model: str  # e.g. "gemini-embedding-001"
+
+    def embed(self, texts: List[str], task: str) -> List[List[float]]:
+        """One vector per text. Raises an ``LLMError`` subclass on failure."""
+        ...
