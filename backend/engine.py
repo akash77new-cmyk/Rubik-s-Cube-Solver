@@ -20,6 +20,8 @@ import sys
 import threading
 from typing import Any, Dict
 
+from backend.ai.service import AIConfig, AIService
+from backend.ai.tracing import TraceStore
 from backend.config import DATA_DIR, DATASET_DIR, ENGINE_HOST, ENGINE_PORT, RUNTIME
 from backend.core.solver import solver_engine
 from backend.db import Database, StorageError, connect
@@ -53,6 +55,20 @@ class VisionEngine:
             on_command=self._on_command,
             on_connect=self._on_connect,
         )
+        # AI (Phase 4): Gemini when GEMINI_API_KEY is set, else built-in answers only.
+        self.ai = AIService.create(
+            AIConfig(
+                api_key=RUNTIME.gemini_api_key,
+                model=RUNTIME.gemini_model,
+                base_url=RUNTIME.gemini_base_url,
+                thinking_level=RUNTIME.gemini_thinking_level,
+                requests_per_minute=RUNTIME.ai_requests_per_minute,
+                requests_per_day=RUNTIME.ai_requests_per_day,
+            ),
+            TraceStore(database),
+            publish=self.server.broadcast,
+            logs=log_bus,
+        )
         self.session = SolveSession(
             settings=self.settings,
             profiles=self.profiles,
@@ -63,6 +79,7 @@ class VisionEngine:
             publish_frame=self.server.broadcast_frame,
             dataset=self.dataset,
             database=database,
+            ai=self.ai,
         )
         # Stream every log entry to subscribers as it happens.
         log_bus.add_listener(lambda entry: self.server.broadcast("log", entry.to_dict()))
@@ -107,6 +124,17 @@ class VisionEngine:
         )
         log.info(summary)  # the terminal, and Render's log
         log_bus.success(summary, source="database")  # the Logs page
+        ai = self.ai.status()
+        if ai["enabled"]:
+            budget = ai["budget"]
+            ai_summary = (
+                f"AI: {ai['provider']} {ai['model']} "
+                f"(limits: {budget['perMinute']}/min, {budget['perDay']}/day)"
+            )
+        else:
+            ai_summary = f"AI: off ({ai['offReason']}), so the assistant gives built-in answers"
+        log.info(ai_summary)
+        log_bus.info(ai_summary, source="ai")
         if self.dataset is not None:
             log_bus.info(f"Dataset collection is on: {DATASET_DIR}", source="dataset")
         # Building the two-phase pruning tables can take a while on first run;

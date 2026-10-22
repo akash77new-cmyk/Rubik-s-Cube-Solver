@@ -22,6 +22,8 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 import cv2
 import numpy as np
 
+from backend.ai.assistant import SnapshotContext
+from backend.ai.service import AIService
 from backend.config import Settings
 from backend.core.color import ColorProfile
 from backend.core.cube import (
@@ -85,6 +87,7 @@ class SolveSession:
         publish_frame: PublishFrame,
         dataset: Optional[DatasetStore] = None,
         database: Optional[Database] = None,
+        ai: Optional[AIService] = None,
     ) -> None:
         self._settings = settings
         self._profiles = profiles
@@ -98,6 +101,8 @@ class SolveSession:
         #: Only used for its status (Settings page) and the "Check connection" button;
         #: the stores above do all the reading and writing.
         self._database = database
+        #: The AI assistant (Phase 4). It answers in its own thread, never on the frame thread.
+        self._ai = ai
 
         config = settings.current
         self.camera = CameraStream(
@@ -1249,6 +1254,7 @@ class SolveSession:
             ),
             "dataset": self.dataset_state(),
             "database": self._database.status() if self._database is not None else None,
+            "ai": self._ai.status() if self._ai is not None else None,
             "timestamp": time.time(),
         }
 
@@ -1344,6 +1350,18 @@ class SolveSession:
         if command == "solver.warmup":
             self._solver.warm_up_async()
             return {"ok": True}
+        if command == "ai.ask":
+            if self._ai is None:
+                return {"ok": False, "error": "The AI assistant is not set up"}
+            # The assistant's tools read this session's snapshot: the same facts the UI shows.
+            result = self._ai.ask(str(payload.get("question", "")), SnapshotContext(self.snapshot))
+            if not result["ok"]:  # the browser's ack only says "queued", so tell it by event
+                self._publish_event("ai:rejected", {"message": result["error"]})
+            return result
+        if command == "ai.traces":
+            traces = self._ai.recent_traces(int(payload.get("limit", 20))) if self._ai is not None else []
+            self._publish_event("ai:traces", traces)
+            return {"ok": True, "count": len(traces)}
         if command == "database.check":
             if self._database is None:
                 return {"ok": False, "error": "No database is connected"}
