@@ -23,6 +23,7 @@ import cv2
 import numpy as np
 
 from backend.ai.assistant import SnapshotContext
+from backend.ai.repair_agent import RepairContext, fallback_answer
 from backend.ai.service import AIService
 from backend.config import Settings
 from backend.core.color import ColorProfile
@@ -129,6 +130,9 @@ class SolveSession:
         self._scan_crops: Dict[str, List[np.ndarray]] = {}
         #: True once the current scan has been saved to the dataset.
         self._dataset_saved = False
+        #: The Smart Repair Agent's card (Phase 5): None, or a dict with "status"
+        #: ("working", "ready" or "applied") and "cube", the cube it belongs to.
+        self._repair: Optional[Dict[str, Any]] = None
         self._face_index = 0
         #: Manual capture by default: the user presses Capture when the side is in
         #: place (more comfortable in real-camera tests). Auto capture is one click away.
@@ -561,6 +565,74 @@ class SolveSession:
             "scan:complete",
             {"validation": validation.to_dict(), "cube": cube.to_dict()},
         )
+        if validation.ok:
+            self._camera_off_after_scan()
+        else:
+            self._start_repair(cube)
+
+    # ==================================================================
+    # Smart Repair Agent (Phase 5)
+    # ==================================================================
+    def _start_repair(self, cube: CubeState) -> None:
+        """Look for the misread sticker(s) of an unsolvable cube, in the background."""
+        readings = None
+        if all(self._scanned.get(face, {}).get("stickers") for face in FACE_ORDER):
+            readings = {face: list(self._scanned[face]["stickers"]) for face in FACE_ORDER}
+        context = RepairContext(cube, readings)
+        with self._lock:
+            self._repair = {"status": "working", "cube": cube.to_color_string()}
+        self._logs.info("The cube is not solvable: looking for misread stickers", source="repair")
+        if self._ai is not None:
+            self._ai.repair_async(context, self._on_repair)
+        else:  # no AI service at all (tools, some tests): the built-in search answers at once
+            self._on_repair(context.proposal(fallback_answer(context, None), "search", None, None))
+
+    def _on_repair(self, proposal: Dict[str, Any]) -> None:
+        with self._lock:
+            if self._cube is None or proposal["cube"] != self._cube.to_color_string():
+                return  # the cube changed meanwhile (rescanned or edited): this proposal is stale
+            self._repair = {"status": "ready", **proposal}
+        self._publish_event("repair:proposed", self._repair)
+        self._broadcast_state()
+
+    def repair_state(self) -> Optional[Dict[str, Any]]:
+        """The repair card, but only while it still belongs to the current cube."""
+        repair, cube = self._repair, self._cube
+        if repair is None or cube is None or repair.get("cube") != cube.to_color_string():
+            return None
+        return repair
+
+    def apply_repair(self) -> Dict[str, Any]:
+        """The user pressed Apply: make the proposed sticker changes (AI rule 7)."""
+        with self._lock:
+            repair = self.repair_state()
+            if repair is None or repair.get("status") != "ready" or repair.get("action") != "apply_fix":
+                return {"ok": False, "error": "There is no fix to apply"}
+            facelets = self._cube.facelets
+            for change in repair["changes"]:
+                facelets[change["face"]][change["index"]] = change["to"]
+            for face in {change["face"] for change in repair["changes"]}:
+                if face in self._scanned:
+                    self._scanned[face]["colors"] = list(facelets[face])
+            cube = CubeState(facelets)
+            self._cube = cube
+            self._solution = None
+            self._repair = {**repair, "status": "applied", "cube": cube.to_color_string()}
+            valid = cube.validate().ok
+        fixed = ", ".join(f"{c['face']}{c['index'] + 1} {c['from']}→{c['to']}" for c in repair["changes"])
+        if valid:
+            self._logs.success(f"Repair applied ({fixed}): the cube is valid", source="repair")
+            self._camera_off_after_scan()
+        else:
+            self._logs.warn(f"Repair applied ({fixed}), but the cube is still not valid", source="repair")
+        self._broadcast_state()
+        return {"ok": True, "valid": valid}
+
+    def _camera_off_after_scan(self) -> None:
+        """A valid cube needs no more camera frames, so the camera turns off (saves CPU)."""
+        if self.camera.is_running:
+            self.camera.stop()
+            self._logs.info("The cube is valid, so the camera was turned off", source="camera")
 
     def _reorient_face(self, face: str, index_map: Sequence[int]) -> None:
         """Re-order one captured face's colours, readings and crops together, so the
@@ -1255,6 +1327,7 @@ class SolveSession:
             "dataset": self.dataset_state(),
             "database": self._database.status() if self._database is not None else None,
             "ai": self._ai.status() if self._ai is not None else None,
+            "repair": self.repair_state(),
             "timestamp": time.time(),
         }
 
@@ -1349,6 +1422,20 @@ class SolveSession:
             return {"ok": True}
         if command == "solver.warmup":
             self._solver.warm_up_async()
+            return {"ok": True}
+        if command == "repair.apply":
+            return self.apply_repair()
+        if command == "repair.dismiss":
+            with self._lock:
+                self._repair = None
+            self._broadcast_state()
+            return {"ok": True}
+        if command == "repair.start":
+            cube = self._cube
+            if cube is None or cube.validate().ok:
+                return {"ok": False, "error": "There is nothing to repair: the cube is valid"}
+            self._start_repair(cube)
+            self._broadcast_state()
             return {"ok": True}
         if command == "ai.ask":
             if self._ai is None:
