@@ -64,10 +64,12 @@ class VisionEngine:
                 thinking_level=RUNTIME.gemini_thinking_level,
                 requests_per_minute=RUNTIME.ai_requests_per_minute,
                 requests_per_day=RUNTIME.ai_requests_per_day,
+                embed_model=RUNTIME.gemini_embed_model,
             ),
             TraceStore(database),
             publish=self.server.broadcast,
             logs=log_bus,
+            database=database,  # the lessons' embeddings live there (Phase 7)
         )
         self.session = SolveSession(
             settings=self.settings,
@@ -135,6 +137,7 @@ class VisionEngine:
             ai_summary = f"AI: off ({ai['offReason']}), so the assistant gives built-in answers"
         log.info(ai_summary)
         log_bus.info(ai_summary, source="ai")
+        self.ai.start_lessons()  # embeds new or changed lessons in the background
         if self.dataset is not None:
             log_bus.info(f"Dataset collection is on: {DATASET_DIR}", source="dataset")
         # Building the two-phase pruning tables can take a while on first run;

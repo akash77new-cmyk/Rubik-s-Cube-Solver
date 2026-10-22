@@ -1445,6 +1445,17 @@ class SolveSession:
             if not result["ok"]:  # the browser's ack only says "queued", so tell it by event
                 self._publish_event("ai:rejected", {"message": result["error"]})
             return result
+        if command == "coach.ask":
+            if self._ai is None:
+                return {"ok": False, "error": "The AI assistant is not set up"}
+            result = self._ai.ask_coach(str(payload.get("question", "")))
+            if not result["ok"]:
+                self._publish_event("ai:rejected", {"message": result["error"]})
+            return result
+        if command == "lessons.list":
+            lessons = self._ai.lessons() if self._ai is not None else []
+            self._publish_event("lessons:list", lessons)
+            return {"ok": True, "count": len(lessons)}
         if command == "ai.traces":
             traces = self._ai.recent_traces(int(payload.get("limit", 20))) if self._ai is not None else []
             self._publish_event("ai:traces", traces)

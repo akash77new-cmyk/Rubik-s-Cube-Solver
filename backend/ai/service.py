@@ -8,9 +8,11 @@ The engine creates one ``AIService`` and hands it to the session. Two features u
   meanwhile - then published as an ``ai:answer`` event.
 - **The Smart Repair Agent** (Phase 5). After an unsolvable scan, the session calls
   ``repair_async()``; the proposal comes back through a callback.
+- **The RAG coach** (Phase 7). ``ask_coach()`` answers from the lessons, with citations,
+  as a ``coach:answer`` event. ``start_lessons()`` embeds the lessons in the background.
 
 Every run is traced and saved, whether the answer came from the model or from the
-built-in fallback. Both features share one request budget.
+built-in fallback. All features share one request budget, embedding requests included.
 """
 
 from __future__ import annotations
@@ -22,15 +24,18 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from backend.ai import repair_agent
+from backend.ai import coach, repair_agent
 from backend.ai.agent import AgentStopped, AgentTask, run_agent
 from backend.ai.assistant import ANSWER_SCHEMA, SYSTEM_PROMPT, TOOL_NAMES, SnapshotContext, build_tools, fallback_answer
-from backend.ai.budget import DAY, BudgetedLLM, RequestBudget
-from backend.ai.gemini import DEFAULT_BASE_URL, GeminiClient
+from backend.ai.budget import DAY, BudgetedEmbedder, BudgetedLLM, RequestBudget
+from backend.ai.coach import CoachContext
+from backend.ai.gemini import DEFAULT_BASE_URL, GeminiClient, GeminiEmbedder
+from backend.ai.lessons import load_lessons
 from backend.ai.llm import LLMBudgetExceeded, LLMClient, LLMError
 from backend.ai.repair_agent import RepairContext
+from backend.ai.retrieval import LessonIndex
 from backend.ai.tracing import Trace, TraceStore
-from backend.db.database import StorageError
+from backend.db.database import Database, StorageError
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +56,9 @@ Publish = Callable[[str, Any], None]
 #: Render one request can take up to ~30 s (a 25 s timeout, then the retry), so a
 #: 30 s limit sometimes stopped the agent before its answer (seen at the Phase 5 go-live).
 REPAIR_DEADLINE_SECONDS = 60.0
+#: The coach's time limit: one embedding request and about two model requests, so the
+#: same slow-request margin as the repair agent.
+COACH_DEADLINE_SECONDS = 60.0
 
 
 @dataclass(frozen=True)
@@ -63,6 +71,7 @@ class AIConfig:
     thinking_level: str = ""  # "" = the model's default
     requests_per_minute: int = 10
     requests_per_day: int = 200
+    embed_model: str = ""  # "" = no embeddings: the coach searches by keywords
 
 
 class AIService:
@@ -78,6 +87,7 @@ class AIService:
         publish: Publish,
         logs: Any = None,
         off_reason: str = "",
+        lessons: Optional[LessonIndex] = None,
     ) -> None:
         self._llm = llm  # None = AI is off: every answer is the built-in one
         self._budget = budget
@@ -88,9 +98,14 @@ class AIService:
         self._lock = threading.Lock()
         self._busy = False
         self._last_error: Optional[str] = None
+        #: The lessons and their search (Phase 7); None = no coach.
+        self._lessons = lessons
 
     @classmethod
-    def create(cls, config: AIConfig, store: Optional[TraceStore], publish: Publish, logs: Any = None) -> "AIService":
+    def create(
+        cls, config: AIConfig, store: Optional[TraceStore], publish: Publish, logs: Any = None,
+        database: Optional[Database] = None,
+    ) -> "AIService":
         """Build the service the engine uses: Gemini if there is a key, else AI off."""
         budget = RequestBudget(config.requests_per_minute, config.requests_per_day)
         if store is not None:
@@ -106,7 +121,14 @@ class AIService:
             )
         else:
             off_reason = "no Gemini API key is set"
-        return cls(llm, budget, store, publish, logs, off_reason)
+        embedder = None
+        if config.api_key and config.embed_model:
+            embedder = BudgetedEmbedder(
+                GeminiEmbedder(config.api_key, config.embed_model, base_url=config.base_url or DEFAULT_BASE_URL),
+                budget,
+            )
+        lessons = LessonIndex(load_lessons(), database, embedder)
+        return cls(llm, budget, store, publish, logs, off_reason, lessons)
 
     # ------------------------------------------------------------------
     def status(self) -> Dict[str, Any]:
@@ -121,6 +143,7 @@ class AIService:
             "busy": busy,
             "budget": self._budget.status(),
             "lastError": last_error,
+            "lessons": self._lessons.status() if self._lessons is not None else None,
         }
 
     def ask(self, question: str, context: SnapshotContext) -> Dict[str, Any]:
@@ -262,6 +285,123 @@ class AIService:
             done(proposal)
 
         threading.Thread(target=worker, name="ai-repair", daemon=True).start()
+
+    # ------------------------------------------------------------------
+    # The RAG coach (Phase 7)
+    # ------------------------------------------------------------------
+    def start_lessons(self) -> None:
+        """Embed new or changed lesson sections in the background (the engine calls this once)."""
+        if self._lessons is None:
+            return
+
+        def worker() -> None:
+            self._lessons.sync()  # type: ignore[union-attr]
+            status = self._lessons.status()  # type: ignore[union-attr]
+            if self._logs is not None:
+                message = (
+                    f"Lessons: {status['lessons']} lessons, {status['sections']} sections; "
+                    f"search: {status['search']}"
+                )
+                if status["error"]:
+                    self._logs.warn(f"{message} ({status['error']})", source="ai")
+                else:
+                    self._logs.info(message, source="ai")
+            self._publish("ai:status", self.status())
+
+        threading.Thread(target=worker, name="ai-lessons", daemon=True).start()
+
+    def lessons(self) -> List[Dict[str, Any]]:
+        """Every lesson with its sections, for the Lessons page."""
+        return [lesson.to_dict() for lesson in self._lessons.lessons] if self._lessons is not None else []
+
+    def ask_coach(self, question: str) -> Dict[str, Any]:
+        """Like ask(), for the coach: returns at once; the answer comes as a coach:answer event."""
+        question = " ".join(str(question or "").split())
+        if self._lessons is None:
+            return {"ok": False, "error": "The lessons are not loaded."}
+        if not question:
+            return {"ok": False, "error": "Type a question first."}
+        if len(question) > self.MAX_QUESTION_LENGTH:
+            return {"ok": False, "error": f"Keep questions under {self.MAX_QUESTION_LENGTH} characters."}
+        with self._lock:
+            if self._busy:
+                return {"ok": False, "error": "The AI is still answering the last question."}
+            self._busy = True
+        run_id = uuid.uuid4().hex[:12]
+        self._publish("ai:status", self.status())
+
+        def worker() -> None:
+            try:
+                self.coach_answer(question, run_id)
+            except Exception as exc:  # a bug must not leave the UI waiting forever
+                log.exception("The coach failed")
+                self._publish("coach:answer", {"runId": run_id, "question": question, "error": str(exc)})
+            finally:
+                with self._lock:
+                    self._busy = False
+                self._publish("ai:status", self.status())
+
+        threading.Thread(target=worker, name="ai-coach", daemon=True).start()
+        return {"ok": True, "runId": run_id}
+
+    def coach_answer(self, question: str, run_id: Optional[str] = None) -> Dict[str, Any]:
+        """Answer one question from the lessons now (ask_coach's thread calls this; so do tests)."""
+        if self._lessons is None:
+            raise RuntimeError("The lessons are not loaded")
+        run_id = run_id or uuid.uuid4().hex[:12]
+        trace = Trace(run_id, "coach", question)
+        context = CoachContext(self._lessons)
+        source, model, reason = "fallback", None, None
+        try:
+            if self._llm is None:
+                reason = self._off_reason
+                trace.error_step("ai_off", reason)
+                answer = coach.fallback_answer(context, question, reason)
+            else:
+                task = AgentTask(
+                    coach.SYSTEM_PROMPT,
+                    question,
+                    coach.build_tools(context),
+                    coach.TOOL_NAMES,
+                    coach.ANSWER_SCHEMA,
+                    max_steps=4,
+                    deadline_seconds=COACH_DEADLINE_SECONDS,
+                    answer_check=context.check_answer,
+                )
+                answer = run_agent(BudgetedLLM(self._llm, self._budget), task, trace)
+                source, model = self._llm.provider, self._llm.model
+        except (LLMError, AgentStopped) as exc:
+            reason = self._reason_text(exc)
+            trace.error_step(getattr(exc, "reason", "error"), str(exc))
+            with self._lock:
+                self._last_error = str(exc)
+            answer = coach.fallback_answer(context, question, reason)
+
+        trace.finish(source, answer, model, reason)
+        if self._store is not None:
+            try:
+                self._store.save(trace)
+            except StorageError as exc:
+                log.warning("AI trace not saved: %s", exc)
+        payload = {
+            "runId": run_id,
+            "question": question,
+            "answer": answer["answer"],
+            "covered": answer["covered"],
+            "citations": answer["citations"],
+            "sources": context.sources(answer["citations"]),
+            "suggestions": answer.get("suggestions", []),
+            "search": context.methods[-1] if context.methods else "keywords",
+            "source": source,
+            "model": model,
+            "reason": reason,
+            **trace.summary(),
+        }
+        self._publish("coach:answer", payload)
+        if self._logs is not None:
+            how = model if source != "fallback" else f"the built-in answer ({reason})"
+            self._logs.info(f"Coach answered with {how}, citing {len(payload['citations'])} section(s)", source="ai")
+        return payload
 
     def recent_traces(self, limit: int = 20) -> List[Dict[str, Any]]:
         """The newest traces with their steps (reads the database)."""
