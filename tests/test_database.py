@@ -23,7 +23,7 @@ NEON = (
     "postgresql://neondb_owner:s3cret@ep-cool-name-a1b2c3.ap-southeast-1.aws.neon.tech/neondb"
     "?sslmode=require&channel_binding=require"
 )
-APP_TABLES = {"app_settings", "color_profiles", "solves"}
+APP_TABLES = {"app_settings", "color_profiles", "solves", "ai_runs", "ai_steps", "lesson_embeddings"}
 
 
 # ----------------------------------------------------------------------------
@@ -51,7 +51,7 @@ def test_check_reports_version_and_schema(open_db):
     database = open_db()
     status = database.status()
     assert status["connected"] is True and status["error"] is None
-    assert status["schemaRevision"] == head_revision() == "0002"
+    assert status["schemaRevision"] == head_revision() == "0003"
     assert status["serverVersion"]
     if database.dialect == "sqlite":
         assert status["pgvector"] is None

@@ -11,6 +11,7 @@ import pytest
 from backend.config import (
     DATA_DIR,
     DATASET_DIR,
+    DEFAULT_EMBED_MODEL,
     DEFAULT_GEMINI_MODEL,
     DEFAULT_SQLITE_FILE,
     ConfigError,
@@ -136,6 +137,7 @@ def test_ai_is_optional_with_safe_defaults():
     assert config.gemini_model == DEFAULT_GEMINI_MODEL
     assert (config.gemini_base_url, config.gemini_thinking_level) == ("", "")
     assert (config.ai_requests_per_minute, config.ai_requests_per_day) == (10, 200)
+    assert config.gemini_embed_model == DEFAULT_EMBED_MODEL == "gemini-embedding-001"
 
 
 def test_ai_settings_from_the_environment():

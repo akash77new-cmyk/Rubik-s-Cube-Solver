@@ -39,6 +39,8 @@ DEFAULT_SQLITE_FILE = DATA_DIR / "cube.db"
 #: Gemini model for the AI features (Phase 4): Google's suggestion for new projects
 #: in Oct 2026 - fast, cheap, and on the free tier. Change it with GEMINI_MODEL.
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+#: Embedding model for the RAG coach (Phase 7). Change it with GEMINI_EMBED_MODEL.
+DEFAULT_EMBED_MODEL = "gemini-embedding-001"
 THINKING_LEVELS = ("minimal", "low", "medium", "high")
 
 for _directory in (DATA_DIR, CACHE_DIR, SOLVER_TABLE_DIR):
@@ -72,6 +74,7 @@ class RuntimeConfig:
     gemini_model: str
     gemini_base_url: str                      # "" = Google's; tests may point it elsewhere
     gemini_thinking_level: str                # "" = the model's default
+    gemini_embed_model: str                   # the RAG coach's embedding model (Phase 7)
     ai_requests_per_minute: int               # the app's own limits, below Google's
     ai_requests_per_day: int
 
@@ -174,6 +177,7 @@ def read_runtime_config(env: Mapping[str, str]) -> RuntimeConfig:
         gemini_model=(env.get("GEMINI_MODEL") or "").strip() or DEFAULT_GEMINI_MODEL,
         gemini_base_url=(env.get("GEMINI_BASE_URL") or "").strip(),
         gemini_thinking_level=thinking_level,
+        gemini_embed_model=(env.get("GEMINI_EMBED_MODEL") or "").strip() or DEFAULT_EMBED_MODEL,
         ai_requests_per_minute=_count(env, "AI_REQUESTS_PER_MINUTE", 10),
         ai_requests_per_day=_count(env, "AI_REQUESTS_PER_DAY", 200),
     )

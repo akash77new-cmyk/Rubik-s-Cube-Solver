@@ -1,12 +1,13 @@
 """Database tables, as SQLAlchemy ORM classes.
 
-Phase 3's three tables replaced the JSON files used before; Phase 4 added two:
+Phase 3's three tables replaced the JSON files used before; Phases 4 and 7 added three:
 
 ========================  =====================================================
 ``app_settings``          the Settings page (one row, all settings as JSON)
 ``color_profiles``        HSV profiles saved on the Calibration page
 ``solves``                solve history behind the Analytics page
 ``ai_runs``, ``ai_steps``  traces of AI runs (Phase 4): see backend/ai/tracing.py
+``lesson_embeddings``     the RAG coach's lesson embeddings (Phase 7): see backend/ai/retrieval.py
 ========================  =====================================================
 
 Built-in HSV presets stay in code (``backend/core/color.py``): they are part of the
@@ -19,12 +20,13 @@ Changing a table means changing a class here **and** adding an Alembic migration
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, MetaData, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import base as postgresql_base
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.types import TypeDecorator
+from sqlalchemy.types import TypeDecorator, UserDefinedType
 
 
 def utcnow() -> datetime:
@@ -55,6 +57,58 @@ class UTCDateTime(TypeDecorator):
         if value.tzinfo is None:  # SQLite
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
+
+
+class PGVector(UserDefinedType):
+    """pgvector's column type, ``vector(n)``: n floats the database can compare."""
+
+    cache_ok = True
+
+    def __init__(self, dimensions: int) -> None:
+        self.dimensions = dimensions
+
+    def get_col_spec(self, **kw: Any) -> str:
+        return f"vector({self.dimensions})"
+
+
+# Let SQLAlchemy recognise "vector" columns when it reads a Postgres schema (the test that
+# compares models.py with the migrations does this).
+postgresql_base.ischema_names["vector"] = PGVector
+
+
+class Vector(TypeDecorator):
+    """An embedding (a list of floats): ``vector(n)`` on Postgres, JSON elsewhere.
+
+    On Postgres the database itself compares embeddings (``<=>`` is cosine distance),
+    which is what the RAG coach's search uses. SQLite has no vector type, so there the
+    list is stored as JSON and compared in Python.
+    """
+
+    impl = JSON
+    cache_ok = True
+
+    def __init__(self, dimensions: int) -> None:
+        super().__init__()
+        self.dimensions = dimensions
+
+    def load_dialect_impl(self, dialect: Dialect) -> Any:
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(PGVector(self.dimensions))
+        return dialect.type_descriptor(JSON())
+
+    def process_bind_param(self, value: Optional[List[float]], dialect: Dialect) -> Any:
+        if value is None:
+            return None
+        if dialect.name == "postgresql":
+            return "[" + ",".join(repr(float(x)) for x in value) + "]"  # pgvector's text format
+        return [float(x) for x in value]
+
+    def process_result_value(self, value: Any, dialect: Dialect) -> Optional[List[float]]:
+        if value is None:
+            return None
+        if isinstance(value, str):  # "[0.1,0.2,...]" from Postgres
+            return [float(x) for x in value.strip("[]").split(",") if x]
+        return [float(x) for x in value]
 
 
 class Base(DeclarativeBase):
@@ -156,3 +210,20 @@ class AIStepRow(Base):
     detail: Mapped[Dict[str, Any]] = mapped_column(JSON)
     duration_ms: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class LessonEmbeddingRow(Base):
+    """The embedding of one lesson section (a chunk), for the RAG coach (Phase 7).
+
+    The lessons themselves are files in backend/lessons/. A row is only valid while
+    the chunk's text (``content_hash``) and the embedding model are unchanged; the
+    index re-embeds anything else at start-up.
+    """
+
+    __tablename__ = "lesson_embeddings"
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)  # the chunk id
+    content_hash: Mapped[str] = mapped_column(String(64))  # sha256 of the embedded text
+    model: Mapped[str] = mapped_column(String(64))  # e.g. "gemini-embedding-001"
+    embedding: Mapped[List[float]] = mapped_column(Vector(768))
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
