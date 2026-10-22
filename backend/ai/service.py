@@ -1,11 +1,16 @@
 """The AI service: runs AI features in the background, with a budget, tracing and a fallback.
 
-The engine creates one ``AIService`` and hands it to the session. When the user
-asks the assistant a question, the session calls ``ask()``, which returns at once.
-The answer is worked out in a background thread - never on the camera thread (AI
-rule 9), and the engine keeps handling other commands meanwhile - then published
-as an ``ai:answer`` event. Every run is traced and saved, whether the answer came
-from the model or from the built-in fallback.
+The engine creates one ``AIService`` and hands it to the session. Two features use it:
+
+- **The Cube Assistant.** When the user asks a question, the session calls ``ask()``,
+  which returns at once. The answer is worked out in a background thread - never on
+  the camera thread (AI rule 9), and the engine keeps handling other commands
+  meanwhile - then published as an ``ai:answer`` event.
+- **The Smart Repair Agent** (Phase 5). After an unsolvable scan, the session calls
+  ``repair_async()``; the proposal comes back through a callback.
+
+Every run is traced and saved, whether the answer came from the model or from the
+built-in fallback. Both features share one request budget.
 """
 
 from __future__ import annotations
@@ -17,11 +22,13 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
+from backend.ai import repair_agent
 from backend.ai.agent import AgentStopped, AgentTask, run_agent
 from backend.ai.assistant import ANSWER_SCHEMA, SYSTEM_PROMPT, TOOL_NAMES, SnapshotContext, build_tools, fallback_answer
 from backend.ai.budget import DAY, BudgetedLLM, RequestBudget
 from backend.ai.gemini import DEFAULT_BASE_URL, GeminiClient
 from backend.ai.llm import LLMBudgetExceeded, LLMClient, LLMError
+from backend.ai.repair_agent import RepairContext
 from backend.ai.tracing import Trace, TraceStore
 from backend.db.database import StorageError
 
@@ -191,6 +198,65 @@ class AIService:
         self._publish("ai:answer", payload)
         self._log(payload)
         return payload
+
+    # ------------------------------------------------------------------
+    # The Smart Repair Agent (Phase 5)
+    # ------------------------------------------------------------------
+    def repair(self, context: RepairContext, run_id: Optional[str] = None) -> Dict[str, Any]:
+        """Find a fix for an unsolvable cube now (repair_async's thread calls this; so do tests)."""
+        run_id = run_id or uuid.uuid4().hex[:12]
+        trace = Trace(run_id, "repair", context.question()[:300])
+        source, model, reason = "search", None, None
+        try:
+            if self._llm is None:
+                reason = self._off_reason
+                trace.error_step("ai_off", reason)
+                answer = repair_agent.fallback_answer(context, reason)
+            else:
+                task = AgentTask(
+                    repair_agent.SYSTEM_PROMPT,
+                    context.question(),
+                    repair_agent.build_tools(context),
+                    repair_agent.TOOL_NAMES,
+                    repair_agent.ANSWER_SCHEMA,
+                    max_steps=4,
+                    deadline_seconds=30.0,
+                    answer_check=context.check_answer,
+                )
+                answer = run_agent(BudgetedLLM(self._llm, self._budget), task, trace)
+                source, model = self._llm.provider, self._llm.model
+        except (LLMError, AgentStopped) as exc:
+            reason = self._reason_text(exc)
+            trace.error_step(getattr(exc, "reason", "error"), str(exc))
+            with self._lock:
+                self._last_error = str(exc)
+            answer = repair_agent.fallback_answer(context, reason)
+
+        trace.finish(source, answer, model, reason)
+        if self._store is not None:
+            try:
+                self._store.save(trace)
+            except StorageError as exc:
+                log.warning("AI trace not saved: %s", exc)
+        proposal = {"runId": run_id, **context.proposal(answer, source, model, reason), **trace.summary()}
+        if self._logs is not None:
+            how = f"{model}" if source != "search" else "the built-in search"
+            self._logs.info(f"Repair proposal from {how}: {answer['message']}", source="ai")
+        return proposal
+
+    def repair_async(self, context: RepairContext, done: Callable[[Dict[str, Any]], None]) -> None:
+        """Run repair() in a background thread and hand the proposal to ``done``."""
+
+        def worker() -> None:
+            try:
+                proposal = self.repair(context)
+            except Exception:  # a bug must not leave the repair card spinning forever
+                log.exception("The repair agent failed")
+                answer = repair_agent.fallback_answer(context, "something went wrong")
+                proposal = context.proposal(answer, "search", None, "something went wrong")
+            done(proposal)
+
+        threading.Thread(target=worker, name="ai-repair", daemon=True).start()
 
     def recent_traces(self, limit: int = 20) -> List[Dict[str, Any]]:
         """The newest traces with their steps (reads the database)."""

@@ -9,6 +9,7 @@
     budget.py     requests per minute / per day, so the free quota lasts
     tracing.py    every model request and tool call, saved in the database
     assistant.py  the Cube Assistant: its tools, prompt and built-in fallback
+    repair_agent.py  the Smart Repair Agent (Phase 5): picks a proven fix or asks for a rescan
     service.py    runs it all in the background and publishes the answers
 
 Rules: CLAUDE.md section 4. Only the engine process uses this package; the web

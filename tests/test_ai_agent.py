@@ -145,3 +145,12 @@ def test_progress_is_reported_per_tool_call():
     llm = ScriptedLLM([tool_call("get_solution"), tool_call(FINAL_ANSWER, answer="3 moves.")])
     run_agent(llm, task(), on_progress=lambda step, tool: seen.append((step, tool)))
     assert seen == [(1, "get_solution")]
+
+
+def test_an_answer_check_can_reject_a_schema_valid_answer():
+    def check(answer):
+        return [] if "moves" in answer["answer"] else ["say how many moves"]
+
+    llm = ScriptedLLM([tool_call(FINAL_ANSWER, answer="Guess"), tool_call(FINAL_ANSWER, answer="3 moves.")])
+    assert run_agent(llm, task(answer_check=check)) == {"answer": "3 moves."}
+    assert tool_results(llm.requests[1])[FINAL_ANSWER]["error"] == "Answer rejected: say how many moves. Call final_answer again."

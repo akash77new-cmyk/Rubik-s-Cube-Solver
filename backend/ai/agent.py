@@ -10,8 +10,9 @@ How it stays safe (AI rule 6):
 - **Step limit and time limit:** at most ``max_steps`` model requests, and no new
   request after ``deadline_seconds``.
 - **Structured answer:** the model answers by calling a special ``final_answer``
-  tool whose arguments must match ``answer_schema``. A wrong answer is sent back with
-  the reasons, and the model may fix it within the step limit.
+  tool whose arguments must match ``answer_schema`` (and pass ``answer_check``, if the
+  task has one). A wrong answer is sent back with the reasons, and the model may fix
+  it within the step limit.
 - **Grounded answer:** ``final_answer`` must come alone, after the model has read
   the results of the tools it called. Calling it next to other tools is refused.
 - **Traced:** every model request and tool call is recorded in the ``Trace``.
@@ -46,6 +47,9 @@ class AgentTask:
     answer_schema: Dict[str, Any]
     max_steps: int = 5
     deadline_seconds: float = 45.0
+    #: Extra checks the schema can't express (e.g. "fix_id must be one the tool
+    #: returned"). Returns problems as messages; [] = the answer is accepted.
+    answer_check: Optional[Callable[[Dict[str, Any]], List[str]]] = None
 
 
 class AgentStopped(Exception):
@@ -106,6 +110,8 @@ def run_agent(
                     }
                 else:
                     errors = validate(call.args, task.answer_schema)
+                    if not errors and task.answer_check is not None:
+                        errors = task.answer_check(dict(call.args))
                     if not errors:
                         answer = dict(call.args)
                         if trace is not None:
