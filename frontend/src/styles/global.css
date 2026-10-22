@@ -1851,6 +1851,9 @@ select { cursor: pointer; }
   transition: all var(--dur-3) var(--ease);
 }
 .learn-track-item[data-state="done"] .learn-track-dot { color: #fff; background: var(--status-good); border-color: transparent; }
+/* finished before, but broken right now by the learner's own move (mid-algorithm, or a slip) */
+.learn-track-item[data-state="broken"] .learn-track-dot { color: #fff; background: var(--status-warning); border-color: transparent; }
+.learn-track-item[data-state="broken"] .learn-track-meta { color: var(--status-warning); }
 .learn-track-item[data-state="current"] .learn-track-dot {
   color: #fff; background: var(--gradient-brand); border-color: transparent;
   box-shadow: 0 0 0 5px rgba(139, 92, 246, 0.18), 0 8px 26px -8px var(--brand-glow);
@@ -1945,6 +1948,9 @@ select { cursor: pointer; }
 }
 .learn-guide-move { display: flex; align-items: center; gap: var(--sp-4); }
 .learn-guide-move .move-hero-notation { font-size: 40px; }
+/* Room for the longest instruction (3 lines), so the Done button below never moves. */
+.learn-guide-move .learn-text { min-height: calc(3 * 1.6em); }
+@media (max-width: 600px) { .learn-guide-move { flex-direction: column; text-align: center; } }
 .learn-guide-strip { display: flex; flex-wrap: wrap; gap: 5px; }
 .learn-guide-strip span {
   min-width: 34px; padding: 4px 8px; border-radius: 8px; text-align: center; font-family: var(--mono); font-size: 13px; font-weight: 700;

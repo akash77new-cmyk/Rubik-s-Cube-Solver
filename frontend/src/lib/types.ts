@@ -391,8 +391,10 @@ export interface LearnState {
   id: string;
   /** True once the learner holds the cube as shown */
   ready: boolean;
-  /** 1-7, or 8 when solved */
+  /** 1-7, or 8 when solved: what the stickers show now (drops for a moment mid-algorithm) */
   stage: number;
+  /** The stage the learner is working on: the first one not finished yet (8 = all done) */
+  working: number;
   solved: boolean;
   top: ColorCode;
   front: ColorCode;

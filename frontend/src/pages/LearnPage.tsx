@@ -56,7 +56,9 @@ export default function LearnPage({ navigate }: { navigate: (page: PageId) => vo
 
   if (!learn) return <LearnIntro navigate={navigate} paint={paint} />;
 
-  const stage = learn.stages[Math.min(learn.stage, 7) - 1];
+  // The stage being worked on, not the one the stickers show right now: that one drops
+  // for a moment in the middle of most algorithms.
+  const stage = learn.stages[Math.min(learn.working, 7) - 1];
   return (
     <>
       <PageHead
@@ -64,7 +66,7 @@ export default function LearnPage({ navigate }: { navigate: (page: PageId) => vo
         description={
           learn.solved
             ? `Solved with the beginner method in ${learn.moveCount} moves`
-            : `Beginner method · stage ${learn.stage} of 7 · ${learn.moveCount} moves so far`
+            : `Beginner method · stage ${stage.number} of 7 · ${learn.moveCount} moves so far`
         }
         actions={
           <>
@@ -78,7 +80,7 @@ export default function LearnPage({ navigate }: { navigate: (page: PageId) => vo
         }
       />
 
-      <StageTrack stages={learn.stages} current={learn.stage} />
+      <StageTrack learn={learn} />
 
       <div className="learn-layout">
         <CubeCard learn={learn} paint={paint} />
@@ -109,25 +111,38 @@ export default function LearnPage({ navigate }: { navigate: (page: PageId) => vo
 
 /* ------------------------------------------------------------------ the 7 stages */
 
-function StageTrack({ stages, current }: { stages: LearnStage[]; current: number }) {
+function StageTrack({ learn }: { learn: LearnState }) {
+  const guiding = learn.guide.length > 0;
   return (
     <Card className="learn-track-card">
       <ol className="learn-track">
-        {stages.map((stage) => {
-          const state = stage.done && stage.number < current ? "done" : stage.current ? "current" : "todo";
+        {learn.stages.map((stage) => {
+          // A finished stage stays ticked. If the learner's own move has broken it, it turns
+          // amber; in the middle of shown moves that's expected, so it stays green.
+          const broken = stage.done && stage.number >= learn.stage && !guiding;
+          const state = stage.done ? (broken ? "broken" : "done") : stage.current ? "current" : "todo";
           return (
-            <li key={stage.number} className="learn-track-item" data-state={state}>
+            <li
+              key={stage.number}
+              className="learn-track-item"
+              data-state={state}
+              title={broken ? "Finished before, but broken right now: finish your algorithm, or press Undo" : undefined}
+            >
               {stage.number === 3 && (
                 <span className="learn-track-flip" title="Turn the cube over: yellow on top">
                   <IconFlip size={12} />
                 </span>
               )}
               <span className="learn-track-dot">
-                {state === "done" ? <IconCheck size={15} /> : stage.number}
+                {stage.done ? <IconCheck size={15} /> : stage.number}
               </span>
               <span className="learn-track-name">{stage.name}</span>
               <span className="learn-track-meta">
-                {state === "done" ? (stage.alone ? "on your own" : `with ${stage.hints + stage.shown} hint(s)`) : stage.top === "W" ? "white on top" : "yellow on top"}
+                {broken
+                  ? "broken for now"
+                  : stage.done
+                    ? stage.alone ? "on your own" : `with ${stage.hints + stage.shown} hint(s)`
+                    : stage.top === "W" ? "white on top" : "yellow on top"}
               </span>
             </li>
           );
@@ -300,37 +315,24 @@ function StepView({ learn, stage }: { learn: LearnState; stage: LearnStage }) {
   const moves = learn.guideAll;
   const doneCount = moves.length - guide.length;
   const thinking = learn.tutorBusy && learn.hints.some((hint) => hint.source === "built-in");
+  const guiding = guide.length > 0;
 
+  // While moves are shown, nothing above the Done button changes, so it stays in one place:
+  // old banners are hidden, and the guide comes before the hints (a hint's text can change
+  // when the tutor's words arrive).
   return (
     <div className="learn-step">
-      {learn.justDone && <DoneBanner done={learn.justDone} />}
-      {learn.note && (
+      {!guiding && learn.justDone && <DoneBanner done={learn.justDone} />}
+      {!guiding && learn.note && (
         <div className="learn-banner" data-tone="warning">
           <IconUndo size={16} />
           <div>{learn.note}</div>
         </div>
       )}
       <p className="learn-goal">{stage.goal}</p>
-      <p className="learn-big">{guide.length > 0 && learn.guideTask ? learn.guideTask : step.task}</p>
+      <p className="learn-big">{guiding && learn.guideTask ? learn.guideTask : step.task}</p>
 
-      {learn.hints.map((hint: LearnHint) => (
-        <div key={hint.level} className="learn-hint">
-          <div className="learn-hint-head">
-            <span className="learn-hint-level">{hint.level}</span>
-            <b>{HINT_TITLES[hint.level]}</b>
-            <SourceTag source={hint.source} model={hint.model} />
-          </div>
-          <p>{hint.text}</p>
-          {hint.level === 2 && step.algorithmNotation && (
-            <code className="learn-alg" title={step.algorithm ?? undefined}>
-              {step.algorithmNotation}
-            </code>
-          )}
-        </div>
-      ))}
-      {thinking && <p className="ai-progress">The tutor is writing your hint…</p>}
-
-      {guide.length > 0 ? (
+      {guiding && (
         <div className="learn-guide">
           <div className="learn-guide-move">
             <MoveGlyph move={guide[0]} size={112} key={`${guide[0].notation}-${learn.version}`} />
@@ -358,7 +360,26 @@ function StepView({ learn, stage }: { learn: LearnState; stage: LearnStage }) {
           </Button>
           <p className="ai-note">Do this move on your cube, then press Done. Any other move stops the guide.</p>
         </div>
-      ) : (
+      )}
+
+      {learn.hints.map((hint: LearnHint) => (
+        <div key={hint.level} className="learn-hint">
+          <div className="learn-hint-head">
+            <span className="learn-hint-level">{hint.level}</span>
+            <b>{HINT_TITLES[hint.level]}</b>
+            <SourceTag source={hint.source} model={hint.model} />
+          </div>
+          <p>{hint.text}</p>
+          {hint.level === 2 && step.algorithmNotation && (
+            <code className="learn-alg" title={step.algorithm ?? undefined}>
+              {step.algorithmNotation}
+            </code>
+          )}
+        </div>
+      ))}
+      {thinking && <p className="ai-progress">The tutor is writing your hint…</p>}
+
+      {!guiding && (
         <>
           <div className="btn-row learn-actions">
             {learn.hintLevel < 2 && (

@@ -157,6 +157,52 @@ def test_shown_moves_are_finished_before_anything_else():
     assert learn.stage >= 4
 
 
+def follow_guide(learn):
+    """Press "Show me", then Done for each shown move until the guide stops. Returns (shown, made)."""
+    learn.show()
+    shown, made = len(learn.to_dict()["guideAll"]), 0
+    while learn.to_dict()["guide"]:
+        learn.move(learn.to_dict()["guide"][0]["notation"])
+        made += 1
+    return shown, made
+
+
+def test_a_guide_stops_as_soon_as_its_stage_is_done():
+    learn = started()
+    while learn.stage == 1:
+        follow_guide(learn)
+    while learn.stage == 2:
+        shown, made = follow_guide(learn)
+    assert made == shown - 1  # the corner trick's last D isn't needed: the white layer is already done
+    data = learn.to_dict()
+    assert data["guide"] == [] and data["hintLevel"] == 0 and data["justDone"]["number"] == 2
+    assert learn.step().kind == "turn_over"
+
+
+def test_the_stage_bar_keeps_the_working_stage_in_the_middle_of_an_algorithm():
+    learn = turned_over()
+    learn.show()
+    seen = []
+    while learn.to_dict()["guide"]:
+        learn.move(learn.to_dict()["guide"][0]["notation"])
+        data = learn.to_dict()
+        seen.append(data["stage"])
+        if data["guide"]:  # still in the middle of the shown moves
+            assert data["working"] == 3 and data["stages"][2]["current"] is True
+            assert data["stages"][0]["done"] and data["stages"][1]["done"]
+    assert min(seen) < 3  # the white layer did come apart for a moment
+
+
+def test_undo_takes_a_finished_stage_back():
+    learn = started()
+    while learn.stage == 1:
+        follow_guide(learn)
+    assert learn.to_dict()["working"] == 2
+    learn.undo()  # the move that finished the white cross
+    data = learn.to_dict()
+    assert learn.stage == 1 and data["working"] == 1 and data["stages"][0]["done"] is False
+
+
 def test_following_the_app_solves_the_cube_and_counts_the_stages():
     learn = started(scrambled_cube(11))
     for _ in range(80):

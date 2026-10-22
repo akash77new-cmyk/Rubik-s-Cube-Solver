@@ -42,6 +42,7 @@ class LearnSession:
         self._clock = clock
         self._states: List[str] = [cube.to_color_string()]  # the cube after each action
         self._actions: List[str] = []
+        self._completed: List[List[int]] = []  # the stages each action finished (Undo un-finishes them)
         #: Counts every change (moves, undo, turning over), so the UI animates each move once.
         self.version = 0
         self._animate: Optional[str] = None  # the move just made, for the 3D turn (None after undo)
@@ -49,6 +50,7 @@ class LearnSession:
         self._guide: List[str] = []  # moves still to do from "Show me" (or hint 3)
         self._guide_all: List[str] = []  # all the moves that were shown
         self._guide_task = ""  # what those moves do
+        self._guide_stage = 0  # the stage those moves finish: the guide stops once it is done
         self._hint_level = 0
         self._hint_texts: Dict[int, Dict[str, Any]] = {}  # level -> {"text", "source", "model"}
         self._hint_key: Optional[Tuple[Any, ...]] = None
@@ -85,6 +87,16 @@ class LearnSession:
     @property
     def solved(self) -> bool:
         return self._stage == 8
+
+    @property
+    def working_stage(self) -> int:
+        """The stage the learner is working on: the first one not finished yet (8 = all done).
+
+        ``stage`` is what the stickers show right now, and it drops for a moment in the
+        middle of most algorithms (the white layer comes apart, then back). The stage
+        bar, the page title and the stats follow this one instead, so they don't jump back.
+        """
+        return next((s.number for s in STAGES if not self._stats[s.number]["done"]), 8)
 
     def step(self) -> Optional[Step]:
         """The next step for the cube as it is now (computed once per cube)."""
@@ -142,9 +154,15 @@ class LearnSession:
         else:
             self._guide = []  # the learner went their own way: stop guiding
             following = False
-        self._stats[self._stage]["moves"] += 1
+        self._stats[min(self.working_stage, 7)]["moves"] += 1
         self._push(name, beginner.turn(self.state, [name]))
         broke = self._after_change()
+        if following and self._guide and self._stage > self._guide_stage:
+            # The shown moves finished their stage (or solved the cube) before their end:
+            # the corner trick's last D, for example. Stop here instead of asking for
+            # moves that are no longer needed.
+            self._guide = []
+            self._reset_hints()
         if broke is not None and not following:
             self.note = (f"That move broke your {broke.lower()}. Press Undo, or keep going if you are in "
                          "the middle of an algorithm.")
@@ -166,6 +184,8 @@ class LearnSession:
             raise LearnError("Nothing to undo")
         self._actions.pop()
         self._states.pop()
+        for number in self._completed.pop():  # the stages that action finished are not done any more
+            self._stats[number]["done"] = False
         self.version += 1
         self._animate = None
         self._guide = []
@@ -175,11 +195,9 @@ class LearnSession:
         """'Show me': reveal the step's moves and guide the learner through them."""
         step = self._current_moves_step()
         self._hint_level = MAX_HINT
-        self._guide = list(step.moves)
-        self._guide_all = list(step.moves)
-        self._guide_task = step.task
-        self._stats[self._stage]["shown"] += 1
-        self._stats[self._stage]["alone"] = False
+        self._start_guide(step)
+        self._stats[min(self.working_stage, 7)]["shown"] += 1
+        self._stats[min(self.working_stage, 7)]["alone"] = False
 
     def hint(self) -> int:
         """The next hint level (1-3). Level 3 shows the moves, like 'Show me'."""
@@ -187,12 +205,10 @@ class LearnSession:
         if self._hint_level >= MAX_HINT:
             return MAX_HINT
         self._hint_level += 1
-        self._stats[self._stage]["hints"] += 1
-        self._stats[self._stage]["alone"] = False
+        self._stats[min(self.working_stage, 7)]["hints"] += 1
+        self._stats[min(self.working_stage, 7)]["alone"] = False
         if self._hint_level == MAX_HINT:
-            self._guide = list(step.moves)
-            self._guide_all = list(step.moves)
-            self._guide_task = step.task
+            self._start_guide(step)
         else:  # the built-in text at once; the tutor's words replace it when they arrive
             text = step.look if self._hint_level == 1 else step.how
             self._hint_texts[self._hint_level] = {"text": text, "source": "built-in", "model": None}
@@ -228,6 +244,15 @@ class LearnSession:
             raise LearnError("Turn the cube over first")
         return step
 
+    def _start_guide(self, step: Step) -> None:
+        """Show the step's moves one at a time ("Show me", or hint 3)."""
+        self._guide = list(step.moves)
+        self._guide_all = list(step.moves)
+        self._guide_task = step.task
+        # The stage these moves finish. With yellow on top, a stage 1-2 step can only be the
+        # "undo these moves" step: it is done when the white layer is whole again (stage 3).
+        self._guide_stage = 2 if self.state[4] == "Y" and step.stage < 3 else step.stage
+
     def _need_ready(self) -> None:
         if not self.ready:
             raise LearnError("First hold the cube as shown, then press the button below it")
@@ -244,6 +269,7 @@ class LearnSession:
         self.just_done = None
         new = current_stage(self.state)
         broke = None
+        finished: List[int] = []
         if new > self._stage:
             now = self._clock()
             for number in range(self._stage, new):
@@ -252,9 +278,12 @@ class LearnSession:
                     stats["done"] = True
                     stats["seconds"] = round(stats["seconds"] + now - self._stage_started, 1)
                     self.just_done = number
+                    finished.append(number)
             self._stage_started = now
         elif new < self._stage and not undo:
             broke = STAGES[new - 1].name
+        if not undo:
+            self._completed.append(finished)
         self._stage = new
         # While the learner follows shown moves, the step stays the same. Otherwise a new
         # step, or the end of the shown moves, starts the hints again from level 0.
@@ -340,10 +369,12 @@ class LearnSession:
                 step_data.update(algorithm=full["algorithm"], algorithmNotation=full["algorithmNotation"])
             if self._hint_level >= MAX_HINT:
                 step_data.update(moves=full["moves"], notation=full["notation"])
+        working = self.working_stage
         return {
             "id": self.id,
             "ready": self.ready,
             "stage": self._stage,
+            "working": working,
             "solved": self.solved,
             "top": self.state[4],
             "front": self.state[22],
@@ -356,7 +387,7 @@ class LearnSession:
             "history": self._actions[-14:],
             "stages": [
                 {**stage.to_dict(), "done": self._stats[stage.number]["done"],
-                 "current": stage.number == self._stage, "hints": self._stats[stage.number]["hints"],
+                 "current": stage.number == working, "hints": self._stats[stage.number]["hints"],
                  "shown": self._stats[stage.number]["shown"], "moves": self._stats[stage.number]["moves"],
                  "alone": self._stats[stage.number]["alone"]}
                 for stage in STAGES
