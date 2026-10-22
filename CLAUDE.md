@@ -206,7 +206,7 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 | 2 | Per-sticker detection data + dataset collection | ✅ |
 | 2B | Guided scanning: centre-based face identity, un-mirroring, orientation repair | ✅ |
 | 3 | Database: Neon Postgres, SQLAlchemy, Alembic (pgvector available for Phase 7) | ✅ |
-| 4 | AI foundation: LLM client, tool registry, tracing, fallbacks | ⬜ |
+| 4 | AI foundation: LLM client, tool registry, tracing, fallbacks (+ AI Assistant) | ✅ |
 | 5 | Smart Repair Agent | ⬜ |
 | 6 | Beginner (layer-by-layer) solver + solution stages | ⬜ |
 | 7 | Lessons + RAG Coach | ⬜ |
