@@ -4,6 +4,7 @@
     python tools/verify.py            # offline checks only
     python tools/verify.py --live     # also drive a running app over Socket.IO
     python tools/verify.py --live --expect-db postgresql   # ... and require Postgres
+    python tools/verify.py --live --expect-ai gemini       # ... and require a real AI answer
 
 Offline checks need nothing running. The ``--live`` pass expects
 ``python run.py --headless`` in another terminal and exercises the real
@@ -231,6 +232,42 @@ def run_offline() -> None:
             second.dispose()
         return f"schema {head_revision()} matches models.py; settings, a profile and a solve survived a restart"
 
+    @check("AI · tool-calling agent: answer checked, run traced, built-in answer without a key")
+    def _() -> str:
+        from backend.ai.agent import FINAL_ANSWER
+        from backend.ai.assistant import SnapshotContext
+        from backend.ai.budget import RequestBudget
+        from backend.ai.fake import ScriptedLLM, tool_call
+        from backend.ai.service import AIService
+        from backend.ai.tracing import TraceStore
+        from backend.core.solver import SolverEngine
+        from backend.services.logbus import LogBus
+        from backend.services.session import SolveSession
+
+        stores = memory_stores()
+        session = SolveSession(
+            **stores, solver=SolverEngine(), logs=LogBus(),
+            publish_event=lambda event, data: None, publish_frame=lambda jpeg: None,
+        )
+        session.handle_command("cube.reset", {})  # a solved cube
+        context = SnapshotContext(session.snapshot)
+        store = TraceStore(stores["database"])
+
+        # A scripted model (tests never call real APIs): one tool call, then the answer.
+        llm = ScriptedLLM([tool_call("get_cube_state"), tool_call(FINAL_ANSWER, answer="Your cube is solved.")])
+        ai = AIService(llm, RequestBudget(10, 100), store, publish=lambda event, data: None)
+        payload = ai.answer("Is my cube solved?", context)
+        assert payload["source"] == "scripted", f"answer came from {payload['source']}: {payload['reason']}"
+        tool_result = llm.requests[1].messages[-1].tool_results[0].response
+        assert tool_result["is_solved"] is True, f"the tool did not read the session: {tool_result}"
+        steps = [step["kind"] for step in store.recent(1)[0]["steps"]]
+        assert steps == ["model", "tool", "model", "answer"], f"trace steps: {steps}"
+
+        off = AIService(None, RequestBudget(10, 100), store, lambda e, d: None, off_reason="no Gemini API key is set")
+        fallback = off.answer("Is my cube solved?", context)
+        assert fallback["source"] == "fallback" and "Your cube is solved." in fallback["answer"], fallback
+        return "scripted model -> get_cube_state -> schema-checked answer, 4 steps traced; no key -> built-in answer"
+
     @check("dataset · a scanned cube is saved as 54 labelled sticker crops")
     def _() -> str:
         import json
@@ -346,7 +383,7 @@ def run_offline() -> None:
 # Live checks
 # ======================================================================
 
-def run_live(url: str, expect_db: str | None = None) -> None:
+def run_live(url: str, expect_db: str | None = None, expect_ai: str | None = None) -> None:
     try:
         import socketio  # type: ignore
     except ImportError:
@@ -449,6 +486,19 @@ def run_live(url: str, expect_db: str | None = None) -> None:
             f"schema {database['schemaRevision']}{extra}"
         )
 
+    @check("live · AI assistant answers (Gemini, or the built-in answer)")
+    def _() -> str:
+        answers: list = []
+        client.on("ai:answer", lambda data: answers.append(data))
+        command("ai.ask", {"question": "How many moves is my solution?"}, settle=0.2)
+        assert wait_for(lambda: bool(answers), timeout=90), "no ai:answer event within 90 s"
+        answer = answers[-1]
+        assert answer.get("answer"), f"no answer: {answer}"
+        if expect_ai:
+            assert answer["source"] == expect_ai, f"expected {expect_ai}, got {answer['source']}: {answer['reason']}"
+        how = answer["model"] if answer["source"] != "fallback" else f"built-in answer ({answer['reason']})"
+        return f"{how}, {answer['durationMs']} ms, {answer['requests']} request(s): {answer['answer'][:70]}"
+
     @check("live · engine streams structured logs")
     def _() -> str:
         assert logs, "no log entries streamed"
@@ -477,12 +527,16 @@ def main(argv: List[str] | None = None) -> int:
         "--expect-db", choices=["postgresql", "sqlite"],
         help="with --live: fail unless the app uses this database",
     )
+    parser.add_argument(
+        "--expect-ai", choices=["gemini"],
+        help="with --live: fail unless the assistant's answer comes from this AI provider",
+    )
     args = parser.parse_args(argv)
 
     print("Rubik's Cube Solver - verification\n" + "=" * 72)
     run_offline()
     if args.live:
-        run_live(args.url, args.expect_db)
+        run_live(args.url, args.expect_db, args.expect_ai)
 
     print()
     for status, name, detail in results:
