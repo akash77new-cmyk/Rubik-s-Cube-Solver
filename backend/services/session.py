@@ -25,6 +25,7 @@ import numpy as np
 from backend.ai.assistant import SnapshotContext
 from backend.ai.repair_agent import RepairContext, fallback_answer
 from backend.ai.service import AIService
+from backend.ai.tutor import TutorContext
 from backend.config import Settings
 from backend.core.color import ColorProfile
 from backend.core.cube import (
@@ -57,6 +58,7 @@ from backend.core.solver import (
 from backend.db.database import Database, StorageError
 from backend.services.analytics import AnalyticsStore, SolveRecord
 from backend.services.dataset import LIGHTING_OPTIONS, DatasetStore, build_scan_record
+from backend.services.learn import LearnError, LearnSession
 from backend.services.logbus import LogBus
 from backend.services.profiles import ProfileStore
 from backend.services.settings import SettingsStore
@@ -133,6 +135,8 @@ class SolveSession:
         #: The Smart Repair Agent's card (Phase 5): None, or a dict with "status"
         #: ("working", "ready" or "applied") and "cube", the cube it belongs to.
         self._repair: Optional[Dict[str, Any]] = None
+        #: Solve & Learn (Phase 8): the learner's own copy of the cube, solved stage by stage.
+        self._learn: Optional[LearnSession] = None
         self._face_index = 0
         #: Manual capture by default: the user presses Capture when the side is in
         #: place (more comfortable in real-camera tests). Auto capture is one click away.
@@ -880,6 +884,109 @@ class SolveSession:
         self._publish_event("analytics", self._analytics.summary())
 
     # ==================================================================
+    # Solve & Learn (Phase 8)
+    # ==================================================================
+    def learn_command(self, action: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """The Learn page's buttons. Code changes the cube; the tutor only explains."""
+        if action == "start":
+            cube = self._cube
+            if cube is None or not cube.validate().ok:
+                return {"ok": False, "error": "Scan a valid cube first"}
+            learn = LearnSession(cube)
+            with self._lock:
+                self._learn = learn
+            self._logs.info(f"Solve & Learn started at stage {learn.stage} of 7", source="learn")
+            self._broadcast_state()
+            return {"ok": True, "stage": learn.stage}
+        learn = self._learn
+        if learn is None:
+            return {"ok": False, "error": "Start Solve & Learn from a scanned cube first"}
+        if action == "exit":
+            with self._lock:
+                self._learn = None
+            self._broadcast_state()
+            return {"ok": True}
+        question = " ".join(str(payload.get("question", "")).split())
+        try:
+            with self._lock:
+                if action == "ready":
+                    learn.set_ready()
+                elif action == "move":
+                    learn.move(str(payload.get("move", "")))
+                elif action == "undo":
+                    learn.undo()
+                elif action == "turnover":
+                    learn.turn_over()
+                elif action == "show":
+                    learn.show()
+                elif action == "hint":
+                    learn.hint()
+                elif action == "ask":
+                    if not question or len(question) > AIService.MAX_QUESTION_LENGTH:
+                        raise LearnError(f"Type a question (up to {AIService.MAX_QUESTION_LENGTH} characters)")
+                    if learn.tutor_busy:
+                        raise LearnError("The tutor is still answering")
+                elif action == "restart":
+                    learn = LearnSession(learn.start_cube)
+                    self._learn = learn
+                else:
+                    return {"ok": False, "error": f"Unknown learn action: {action}"}
+        except LearnError as exc:
+            self._publish_event("learn:rejected", {"message": str(exc)})
+            return {"ok": False, "error": str(exc)}
+
+        if learn.just_done:
+            stage = learn.just_done
+            self._logs.success(f"Learn: stage {stage} of 7 done", source="learn")
+        if action == "hint" and learn.hint_level < 3:
+            self._ask_tutor(learn, "hint")
+        elif action == "ask":
+            self._ask_tutor(learn, "question", question)
+        elif learn.solved and learn.recap is None:
+            self._logs.success(f"Learn: cube solved in {learn.stats()['moves']} moves", source="learn")
+            self._ask_tutor(learn, "recap")
+        self._broadcast_state()
+        return {"ok": True, "stage": learn.stage}
+
+    def _ask_tutor(self, learn: LearnSession, kind: str, question: str = "") -> None:
+        """Ask the AI tutor in the background; its words are stored when they arrive."""
+        lessons = self._ai.lesson_index if self._ai is not None else None
+        with self._lock:
+            context = TutorContext(kind, learn.facts(kind), learn.allowed_sequences(kind), lessons, question)
+            key, level = learn.step_key(), learn.hint_level
+            if kind == "recap":  # the built-in recap shows at once; the tutor's replaces it
+                learn.set_recap({"kind": "recap", "message": context.fallback(None)["message"],
+                                 "source": "built-in", "model": None})
+
+        def done(payload: Dict[str, Any]) -> None:
+            with self._lock:
+                if self._learn is not learn:
+                    return  # the learner restarted or left: this answer is for an old cube
+                learn.tutor_busy = False
+                if kind == "hint":
+                    learn.set_hint(level, key, payload["message"], payload["source"], payload["model"])
+                elif kind == "question":
+                    learn.set_answer(payload)
+                else:
+                    learn.set_recap(payload)
+            self._broadcast_state()
+
+        if self._ai is None:  # no AI service at all (tools, some tests): the built-in answer at once
+            answer = context.fallback(None)
+            done({"kind": kind, "question": question or None, "message": answer["message"],
+                  "citations": answer["citations"], "sources": context.sources(answer["citations"]),
+                  "source": "fallback", "model": None, "reason": None})
+            return
+        with self._lock:
+            learn.tutor_busy = True
+        result = self._ai.tutor_async(context, done)
+        if not result["ok"]:
+            with self._lock:
+                learn.tutor_busy = False
+            if kind == "question":
+                self._publish_event("ai:rejected", {"message": result["error"]})
+
+    # ==================================================================
     # Cube manipulation (works with no camera at all - great for demos)
     # ==================================================================
     def scramble(self, length: int = 22) -> Dict[str, Any]:
@@ -1328,6 +1435,7 @@ class SolveSession:
             "database": self._database.status() if self._database is not None else None,
             "ai": self._ai.status() if self._ai is not None else None,
             "repair": self.repair_state(),
+            "learn": self._learn.to_dict() if self._learn is not None else None,
             "timestamp": time.time(),
         }
 
@@ -1406,6 +1514,8 @@ class SolveSession:
             )
         if command.startswith("playback."):
             return self.playback_command(command.split(".", 1)[1], payload)
+        if command.startswith("learn."):
+            return self.learn_command(command.split(".", 1)[1], payload)
         if command.startswith("calibration."):
             return self.calibration_command(command.split(".", 1)[1], payload)
         if command == "settings.update":
