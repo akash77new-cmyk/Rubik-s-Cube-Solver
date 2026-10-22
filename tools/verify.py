@@ -347,6 +347,51 @@ def run_offline() -> None:
             f"{keywords['hits']}/{keywords['total']} with keywords; the coach cited {notation}"
         )
 
+    @check("learn · the beginner method solves random cubes; the tutor's moves are checked")
+    def _() -> str:
+        from backend.ai.tutor import TutorContext
+        from backend.core.beginner import current_stage, solve_all
+        from backend.core.solver import SolverEngine
+        from backend.services.logbus import LogBus
+        from backend.services.session import SolveSession
+
+        counts = []
+        for seed in range(20):  # 20 random cubes, solved stage by stage, the stages in order
+            start = CubeState.solved().apply_sequence(random_scramble(25, seed=seed)).to_color_string()
+            actions, stages = solve_all(start)
+            assert stages == sorted(stages), f"cube {seed}: stages out of order"
+            counts.append(sum(1 for action in actions if action != "turn_over"))
+
+        # The session: start, hold, a hint (the built-in one: no AI here), then "Show me" to the end.
+        session = SolveSession(
+            **memory_stores(), solver=SolverEngine(), logs=LogBus(),
+            publish_event=lambda event, data: None, publish_frame=lambda jpeg: None,
+        )
+        session.handle_command("cube.scramble", {"length": 25})
+        assert session.handle_command("learn.start", {})["ok"]
+        session.handle_command("learn.ready", {})
+        session.handle_command("learn.hint", {})
+        assert session.snapshot()["learn"]["hints"][0]["text"], "no hint"
+        for _ in range(100):
+            learn = session.snapshot()["learn"]
+            if learn["solved"]:
+                break
+            if learn["step"]["kind"] == "turn_over":
+                session.handle_command("learn.turnover", {})
+                continue
+            session.handle_command("learn.show", {})
+            for move in session.snapshot()["learn"]["step"]["notation"].split():
+                session.handle_command("learn.move", {"move": move})
+        learn = session.snapshot()["learn"]
+        assert learn["solved"] and current_stage("".join("".join(learn["cube"][f]) for f in "URFDLB")) == 8
+        assert learn["recap"], "no recap"
+
+        # Hint 1 may not tell the learner which moves to make: code rejects it.
+        context = TutorContext("hint", {"hintLevel": 1, "step": {"look": "Look at the white sticker."}}, [], None)
+        assert context.check_answer({"message": "Do F R U.", "citations": []}), "moves in hint 1 were accepted"
+        return (f"20 random cubes solved in 7 stages ({min(counts)}-{max(counts)} moves); a session solved one "
+                f"with Show me in {learn['moveCount']} moves; moves in hint 1 rejected")
+
     @check("dataset · a scanned cube is saved as 54 labelled sticker crops")
     def _() -> str:
         import json
@@ -612,6 +657,32 @@ def run_live(url: str, expect_db: str | None = None, expect_ai: str | None = Non
             assert answer["source"] == expect_ai, f"expected {expect_ai}, got {answer['source']}: {answer['reason']}"
         how = answer["model"] if answer["source"] != "fallback" else f"built-in answer ({answer['reason']})"
         return f"{how}; search: {answer['search']}; cites {', '.join(answer['citations'])}"
+
+    @check("live · Solve & Learn: a stage step and a tutor hint (Gemini, or the built-in hint)")
+    def _() -> str:
+        command("cube.scramble", settle=0.3)
+        command("learn.start", settle=0.3)
+        command("learn.ready", settle=0.3)
+        assert wait_for(lambda: (state.get("learn") or {}).get("ready")), "Solve & Learn did not start"
+        command("learn.hint", settle=0.2)
+
+        def hint_ready() -> bool:
+            hints = (state.get("learn") or {}).get("hints") or []
+            return bool(hints) and hints[0]["source"] != "built-in"
+
+        assert wait_for(hint_ready, timeout=90), "no tutor hint within 90 s"
+        hint = state["learn"]["hints"][0]
+        if expect_ai:
+            assert hint["source"] == expect_ai, f"expected {expect_ai}, got {hint['source']}"
+        command("learn.show", settle=0.3)
+        moves = state["learn"]["step"]["notation"].split()
+        for move in moves:
+            command("learn.move", {"move": move}, settle=0.15)
+        assert wait_for(lambda: state["learn"]["moveCount"] == len(moves)), "the moves did not arrive"
+        stage = state["learn"]["stage"]
+        command("learn.exit", settle=0.3)  # the live site has one shared session: leave it clean
+        how = hint["model"] if hint["source"] != "fallback" else "built-in hint"
+        return f"{how}: \"{hint['text'][:50]}...\"; followed {len(moves)} shown move(s), now at stage {stage}"
 
     @check("live · engine streams structured logs")
     def _() -> str:

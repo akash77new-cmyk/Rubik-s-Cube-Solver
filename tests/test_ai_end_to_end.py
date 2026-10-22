@@ -1,6 +1,6 @@
 """The whole AI path against tools/fake_gemini.py: real HTTP, thought signatures, tools, trace.
 
-Both features: the Cube Assistant and the Smart Repair Agent.
+Every feature: the Cube Assistant, the Smart Repair Agent, the RAG coach and the AI Tutor.
 
 No internet and no real key: the fake server runs on 127.0.0.1 inside the test.
 """
@@ -14,7 +14,9 @@ from backend.ai.assistant import SnapshotContext
 from backend.ai.repair_agent import RepairContext
 from backend.ai.service import AIConfig, AIService
 from backend.ai.tracing import TraceStore
+from backend.ai.tutor import TutorContext
 from backend.db import connect
+from backend.services.learn import LearnSession
 from tests.sessions import misread, new_session, readings_for, real_cube, with_solution
 from tools.fake_gemini import KEY, Handler, answer
 
@@ -70,6 +72,21 @@ def test_the_coach_end_to_end_with_embeddings(fake_gemini):
     payload = ai.coach_answer("Which way do I turn B?")
     assert (payload["source"], payload["search"], payload["covered"]) == ("gemini", "vectors in Python", True)
     assert payload["citations"] == ["02-notation#the-tricky-sides-b-l-and-d"]
+
+
+def test_the_tutor_end_to_end(fake_gemini):
+    ai = AIService.create(AIConfig(api_key=KEY, model="gemini-test", base_url=fake_gemini), None, lambda e, d: None)
+    learn = LearnSession(real_cube())
+    learn.set_ready()
+    learn.hint()
+    hint = ai.tutor_answer(TutorContext("hint", learn.facts("hint"), learn.allowed_sequences("hint"), ai.lesson_index))
+    assert (hint["source"], hint["requests"]) == ("gemini", 1)
+    assert hint["message"] == "Tutor hint: " + learn.step().look
+    question = "How do I make the yellow cross?"
+    context = TutorContext("question", learn.facts("question"), learn.allowed_sequences("question"), ai.lesson_index, question)
+    answer = ai.tutor_answer(context)
+    assert (answer["source"], answer["requests"]) == ("gemini", 2)
+    assert answer["citations"] == ["05-beginner-method#stage-4-the-yellow-cross"]
 
 
 def test_the_fake_is_strict_about_thought_signatures():

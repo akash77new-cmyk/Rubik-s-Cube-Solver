@@ -14,6 +14,8 @@ It is not a model. For the Cube Assistant it calls get_solution, then answers wi
 final_answer from what the tool returned. For the Smart Repair Agent (Phase 5) it calls
 find_fixes, then picks the first fix, or asks for a rescan if there is none. For the RAG
 coach (Phase 7) it calls search_lessons with the question, then cites the first passage.
+For the AI Tutor (Phase 8) it gives the app's own hint text back, searches the lessons for a
+question, and writes a recap from the stats it was given.
 ``batchEmbedContents`` returns word-hash vectors (see backend/ai/fake.py), so lesson
 search works end to end. tests/test_ai_end_to_end.py uses it too.
 """
@@ -30,6 +32,7 @@ from typing import Any, Dict, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so "backend" imports work
 
 from backend.ai.fake import hash_vector  # noqa: E402 - needs the path above
+from backend.ai.tutor import recap_text  # noqa: E402
 
 KEY = "test-key"
 
@@ -72,7 +75,11 @@ def answer(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
     if not contents:
         return _error(400, "No contents")
     results = [part["functionResponse"] for part in contents[-1].get("parts", []) if "functionResponse" in part]
-    tools = {d["name"] for tool in body.get("tools", []) for d in tool.get("functionDeclarations", [])}
+    declarations = [d for tool in body.get("tools", []) for d in tool.get("functionDeclarations", [])]
+    tools = {d["name"] for d in declarations}
+    final = next((d for d in declarations if d["name"] == "final_answer"), {})
+    if "message" in final.get("parameters", {}).get("properties", {}) and "search_lessons" in tools:
+        return _tutor(contents, results)
     if "search_lessons" in tools:  # the RAG coach
         if not results:
             question = contents[0]["parts"][0].get("text", "")
@@ -99,6 +106,26 @@ def answer(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
     else:
         text = "There is no solution yet. Press Solve first."
     return 200, _call("final_answer", {"answer": text, "suggestions": ["How do I do step 1?"]})
+
+
+def _tutor(contents: Any, results: Any) -> Tuple[int, Dict[str, Any]]:
+    """The AI Tutor: hints echo the app's facts, questions search the lessons first."""
+    prompt = contents[0]["parts"][0].get("text", "")
+    facts = json.loads(prompt.split("Facts from the app (always right):\n", 1)[1])
+    if prompt.startswith("The learner asks: "):
+        if not results:
+            return 200, _call("search_lessons", {"query": prompt.split("\n", 1)[0][len("The learner asks: "):]})
+        passages = results[0].get("response", {}).get("passages", [])
+        if not passages:
+            return 200, _call("final_answer", {"message": "The lessons don't cover that.", "citations": []})
+        first = passages[0]
+        message = f"The lesson \"{first['section']}\" says: {first['text'].split('. ')[0]}."
+        return 200, _call("final_answer", {"message": message[:600], "citations": [first["id"]]})
+    if prompt.startswith("Give hint level"):
+        step = facts.get("step", {})
+        text = step.get("look") if facts["hintLevel"] <= 1 else step.get("how", step.get("look"))
+        return 200, _call("final_answer", {"message": f"Tutor hint: {text}"[:600], "citations": []})
+    return 200, _call("final_answer", {"message": "Well done! " + recap_text(facts.get("stats", {})), "citations": []})
 
 
 def embed(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
