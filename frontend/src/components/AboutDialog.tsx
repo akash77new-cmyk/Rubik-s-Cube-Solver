@@ -45,6 +45,11 @@ const CAPABILITIES: { title: string; detail: string }[] = [
     detail:
       "A Gemini tool-calling agent: it reads facts through read-only tools, answers through a schema-checked final_answer, and every step is traced. Without an API key it gives a built-in answer.",
   },
+  {
+    title: "Smart repair",
+    detail:
+      "An unsolvable scan gets the 1- or 2-sticker fixes the validator accepts; an agent picks one by id (or asks for a rescan) and explains it, and the user confirms before anything changes.",
+  },
 ];
 
 export function AboutDialog({ onClose }: { onClose: () => void }) {

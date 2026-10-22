@@ -325,7 +325,37 @@ export interface Snapshot {
   dataset: DatasetInfo;
   database: DatabaseInfo | null;
   ai: AIStatus | null;
+  repair: RepairInfo | null;
   timestamp: number;
+}
+
+/** One sticker change of a repair proposal (computed by code, never by the model). */
+export interface RepairChange {
+  face: FaceKey;
+  index: number;
+  from: ColorCode;
+  to: ColorCode;
+  /** How sure the camera was of the colour it read (1 = no camera data) */
+  oldConfidence: number;
+  /** How well the new colour fitted that sticker (0 = not among its best 3) */
+  newConfidence: number;
+}
+
+/** The Smart Repair Agent's card after an unsolvable scan (Phase 5). */
+export interface RepairInfo {
+  status: "working" | "ready" | "applied";
+  /** The cube this repair belongs to (54 colour codes) */
+  cube: string;
+  action?: "apply_fix" | "rescan_side";
+  message?: string;
+  changes?: RepairChange[];
+  side?: FaceKey | null;
+  /** "gemini" (or another provider), or "search" for the built-in search */
+  source?: string;
+  model?: string | null;
+  /** Why the built-in search answered */
+  reason?: string | null;
+  fixesFound?: number;
 }
 
 /** The AI assistant's status (Phase 4). */

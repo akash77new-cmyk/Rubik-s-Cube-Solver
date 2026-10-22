@@ -5,6 +5,7 @@ import { CubeNet, FaceGrid } from "@/components/cube";
 import { DatasetCard, scanHints } from "@/components/dataset";
 import { ScanGuide } from "@/components/scanGuide";
 import { ValidationIssueList, flaggedStickers } from "@/components/validation";
+import { RepairPanel, repairStickers } from "@/components/repair";
 import { PageHead, type PageId } from "@/components/layout";
 import { ColorSummary } from "@/components/charts";
 import {
@@ -13,6 +14,7 @@ import {
   IconRestart,
   IconRoute,
   IconScan,
+  IconSparkle,
   IconTarget,
 } from "@/components/Icons";
 import { useApp } from "@/state/AppStore";
@@ -151,7 +153,7 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
               {complete
                 ? validation?.ok
                   ? "All six faces captured and the cube state is valid."
-                  : "All faces captured, but the state is not solvable — fix the highlighted colours."
+                  : "All faces captured, but the cube is not solvable: the repair agent looks for misread stickers."
                 : snapshot?.mode !== "scan"
                   ? "Press Start scanning, then follow the guide beside the camera."
                   : scan?.autoCapture
@@ -204,6 +206,16 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
           {!complete && (
             <Card title="Scan guide" description="Show each side to the camera, as pictured">
               <ScanGuide scan={scan} palette={settings?.cube_palette} action={guideAction} />
+            </Card>
+          )}
+
+          {complete && (validation?.ok === false || snapshot?.repair) && (
+            <Card
+              title="Smart repair"
+              description="An unsolvable scan means the camera misread something: this finds what"
+              icon={<IconSparkle size={16} />}
+            >
+              <RepairPanel />
             </Card>
           )}
 
@@ -269,7 +281,10 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => send("scan.face", { face })}
+                  onClick={() => {
+                    send("scan.face", { face });
+                    if (!snapshot?.camera.running) send("camera.start"); // it turns off after a valid scan
+                  }}
                   title={`Re-scan the ${FACE_NAMES[face]} face`}
                 >
                   {info?.captured ? "Re-scan" : "Scan this"}
@@ -296,7 +311,11 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
             )}
             activeFace={scan?.current ?? null}
             palette={settings?.cube_palette}
-            flagged={complete && validation && !validation.ok ? flaggedStickers(validation.issues, selectedIssue) : undefined}
+            flagged={
+              complete && validation && !validation.ok
+                ? repairStickers(snapshot?.repair) ?? flaggedStickers(validation.issues, selectedIssue)
+                : undefined
+            }
             uncertain={hints.uncertain}
             notes={hints.notes}
           />
