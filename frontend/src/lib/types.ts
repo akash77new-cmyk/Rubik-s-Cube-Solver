@@ -368,6 +368,56 @@ export interface AIStatus {
   busy: boolean;
   budget: { usedLastMinute: number; perMinute: number; usedToday: number; perDay: number };
   lastError: string | null;
+  /** The lessons behind the RAG coach (Phase 7) */
+  lessons: LessonsStatus | null;
+}
+
+export interface LessonsStatus {
+  lessons: number;
+  sections: number;
+  /** Sections with an embedding from the current model */
+  embedded: number;
+  model: string | null;
+  /** How the coach searches right now */
+  search: "pgvector" | "vectors in Python" | "keywords";
+  error: string | null;
+}
+
+/** One lesson (the lessons:list event); each section is one searchable, citable chunk. */
+export interface Lesson {
+  slug: string;
+  title: string;
+  summary: string;
+  sections: { id: string; title: string; text: string }[];
+}
+
+/** A lesson section the coach cited. */
+export interface CoachSource {
+  id: string;
+  lesson: string;
+  lessonTitle: string;
+  section: string;
+}
+
+/** One answer from the coach (the coach:answer event). */
+export interface CoachAnswer {
+  runId: string;
+  question: string;
+  answer: string;
+  /** False when the lessons don't cover the question */
+  covered: boolean;
+  citations: string[];
+  sources: CoachSource[];
+  suggestions: string[];
+  search: string;
+  /** "gemini", or "fallback" for the built-in answer */
+  source: string;
+  model: string | null;
+  reason: string | null;
+  requests: number;
+  durationMs: number;
+  /** Only when the coach itself failed */
+  error?: string;
 }
 
 /** One answer from the assistant (the ai:answer event). */

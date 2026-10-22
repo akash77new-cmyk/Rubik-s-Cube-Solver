@@ -24,6 +24,8 @@ import type {
   AIStatus,
   AITrace,
   AnalyticsInfo,
+  CoachAnswer,
+  Lesson,
   CalibrationInfo,
   CameraInfo,
   DatabaseInfo,
@@ -66,6 +68,8 @@ interface AppStoreValue {
   clearLogs: () => void;
   /** The AI assistant's latest answer, live progress and recent traces (Phase 4). */
   ai: { answer: AIAnswer | null; progress: AIProgress | null; traces: AITrace[] };
+  /** The lessons and the coach's latest answer (Phase 7). */
+  learn: { lessons: Lesson[]; answer: CoachAnswer | null };
 }
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
@@ -79,6 +83,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [aiAnswer, setAiAnswer] = useState<AIAnswer | null>(null);
   const [aiProgress, setAiProgress] = useState<AIProgress | null>(null);
   const [aiTraces, setAiTraces] = useState<AITrace[]>([]);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [coachAnswer, setCoachAnswer] = useState<CoachAnswer | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const toastId = useRef(1);
 
@@ -190,6 +196,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setAiAnswer(data);
     });
     socket.on("ai:traces", (data: AITrace[]) => setAiTraces(Array.isArray(data) ? data : []));
+    socket.on("lessons:list", (data: Lesson[]) => setLessons(Array.isArray(data) ? data : []));
+    socket.on("coach:answer", (data: CoachAnswer) => setCoachAnswer(data));
     socket.on("ai:rejected", (data: { message: string }) =>
       pushToast({ tone: "warning", title: "Assistant", message: data.message }),
     );
@@ -247,10 +255,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       dismissToast,
       clearLogs,
       ai: { answer: aiAnswer, progress: aiProgress, traces: aiTraces },
+      learn: { lessons, answer: coachAnswer },
     }),
     [
       connection, snapshot, detection, logs, toasts, send, pushToast, dismissToast, clearLogs,
-      aiAnswer, aiProgress, aiTraces,
+      aiAnswer, aiProgress, aiTraces, lessons, coachAnswer,
     ],
   );
 

@@ -50,6 +50,11 @@ const CAPABILITIES: { title: string; detail: string }[] = [
     detail:
       "An unsolvable scan gets the 1- or 2-sticker fixes the validator accepts; an agent picks one by id (or asks for a rescan) and explains it, and the user confirms before anything changes.",
   },
+  {
+    title: "RAG coach",
+    detail:
+      "Lessons embedded with Gemini and stored in PostgreSQL with pgvector; the coach answers only from the sections it retrieved, and every citation is checked.",
+  },
 ];
 
 export function AboutDialog({ onClose }: { onClose: () => void }) {

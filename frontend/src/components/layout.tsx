@@ -6,6 +6,7 @@ import { useApp } from "@/state/AppStore";
 import { Button, StatusChip } from "@/components/ui";
 import {
   IconAnalytics,
+  IconBook,
   IconCamera,
   IconCube,
   IconDashboard,
@@ -31,7 +32,8 @@ export type PageId =
   | "calibration"
   | "logs"
   | "settings"
-  | "assistant";
+  | "assistant"
+  | "lessons";
 
 export const NAV: {
   group: string;
@@ -63,6 +65,7 @@ export const NAV: {
     group: "AI",
     items: [
       { id: "assistant", label: "AI Assistant", icon: <IconSparkle />, hint: "Ask about your cube" },
+      { id: "lessons", label: "Lessons & Coach", icon: <IconBook />, hint: "Learn, with cited answers" },
     ],
   },
   {
@@ -85,6 +88,7 @@ export const PAGE_META: Record<PageId, { title: string; subtitle: string }> = {
   logs: { title: "Logs", subtitle: "Live event stream from the vision engine" },
   settings: { title: "Settings", subtitle: "Camera, overlays, playback and appearance" },
   assistant: { title: "AI Assistant", subtitle: "Ask about your cube, your solution and your solves" },
+  lessons: { title: "Lessons & Coach", subtitle: "Short lessons, and a coach that answers from them" },
 };
 
 /* ------------------------------------------------------------------ */

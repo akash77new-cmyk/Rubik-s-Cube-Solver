@@ -224,3 +224,11 @@ export const IconDatabase = (p: IconProps) => (
     <path d="M4.5 12v6.5c0 1.5 3.4 2.75 7.5 2.75s7.5-1.25 7.5-2.75V12" />
   </Icon>
 );
+
+export const IconBook = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15Z" />
+    <path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20v3H6.5A2.5 2.5 0 0 1 4 20.5Z" />
+    <path d="M8.5 7.5h7M8.5 11h5" />
+  </Icon>
+);
