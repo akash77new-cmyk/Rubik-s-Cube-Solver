@@ -47,6 +47,11 @@ REASON_TEXT = {
 
 Publish = Callable[[str, Any], None]
 
+#: The Smart Repair Agent's time limit. A repair needs two Gemini requests, and on
+#: Render one request can take up to ~30 s (a 25 s timeout, then the retry), so a
+#: 30 s limit sometimes stopped the agent before its answer (seen at the Phase 5 go-live).
+REPAIR_DEADLINE_SECONDS = 60.0
+
 
 @dataclass(frozen=True)
 class AIConfig:
@@ -220,7 +225,7 @@ class AIService:
                     repair_agent.TOOL_NAMES,
                     repair_agent.ANSWER_SCHEMA,
                     max_steps=4,
-                    deadline_seconds=30.0,
+                    deadline_seconds=REPAIR_DEADLINE_SECONDS,
                     answer_check=context.check_answer,
                 )
                 answer = run_agent(BudgetedLLM(self._llm, self._budget), task, trace)

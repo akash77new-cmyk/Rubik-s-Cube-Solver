@@ -2,6 +2,7 @@
 
 import threading
 
+import backend.ai.service as ai_service
 from backend.ai.agent import FINAL_ANSWER
 from backend.ai.budget import RequestBudget
 from backend.ai.fake import ScriptedLLM, tool_call, tool_calls
@@ -78,6 +79,23 @@ def test_a_made_up_fix_id_is_sent_back_and_corrected():
     ])
     proposal = ai.repair(context())
     assert proposal["message"] == "Fix 1." and proposal["requests"] == 3
+
+
+def test_a_slow_gemini_still_gets_to_answer(monkeypatch):
+    """Timings seen on the live site (Render): the first request took 30.5 s (a 25 s timeout,
+    then a retry), the second 5 s. The agent must still answer instead of the fallback."""
+    now = [0.0]
+
+    class SlowLLM(ScriptedLLM):
+        def generate(self, request):
+            now[0] += 30.5 if not self.requests else 5.0
+            return super().generate(request)
+
+    run_agent = ai_service.run_agent
+    monkeypatch.setattr(ai_service, "run_agent", lambda llm, task, trace=None: run_agent(llm, task, trace, clock=lambda: now[0]))
+    llm = SlowLLM([LOOK, tool_call(FINAL_ANSWER, action="apply_fix", fix_id=1, message="Red, not orange.")])
+    proposal = AIService(llm, RequestBudget(10, 100), None, lambda e, d: None).repair(context())
+    assert (proposal["source"], proposal["message"]) == ("scripted", "Red, not orange."), proposal["reason"]
 
 
 def test_without_ai_or_on_errors_the_search_answers():
