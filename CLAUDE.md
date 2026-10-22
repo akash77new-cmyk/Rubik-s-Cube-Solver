@@ -163,6 +163,17 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 - `repair.apply` (the user's Apply) is the only way a proposal changes the cube (rule 7).
 - A valid scan, or a fix that makes the cube valid, turns the camera off.
 
+### 4c. The RAG coach (Phase 7)
+- Lessons are Markdown files in `backend/lessons/`; each `## ` section is a chunk with a stable id
+  (`02-notation#clockwise-primes-and-doubles`). Changing a heading changes the id.
+- `LessonIndex.sync()` (started by the engine, in the background) embeds only new or changed
+  sections into `lesson_embeddings` (768 numbers, `gemini-embedding-001`). Search: pgvector on
+  Postgres, NumPy on SQLite, BM25 keywords when embeddings are missing or fail.
+- The coach (`coach.py`) has one tool, `search_lessons`. Its answer must cite section ids that
+  the tool returned in this run (`answer_check`), and `covered: false` means "not in the lessons".
+- Embedding requests go through the same budget as model requests.
+- `backend/ai/lessons.py` has an evaluation set (`EVAL_QUESTIONS`): recall@3 must stay ≥ 13 of 15.
+
 ## 5. Deployment constraints (Render free tier)
 - **512 MB RAM, 0.1 CPU.** Phase 0 baseline is about 160 MB for all processes. Measure memory
   when adding heavy dependencies. Phase 3 (SQLAlchemy, Alembic, psycopg) adds about 50 MB to
@@ -220,7 +231,7 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 | 4 | AI foundation: LLM client, tool registry, tracing, fallbacks (+ AI Assistant) | ✅ |
 | 5 | Smart Repair Agent (in the Scanner: proven fixes, agent picks, user applies) | ✅ |
 | 6 | Beginner (layer-by-layer) solver + solution stages | ⬜ |
-| 7 | Lessons + RAG Coach | ⬜ |
+| 7 | Lessons + RAG Coach (pgvector, cited answers) | ✅ |
 | 8 | AI Tutor | ⬜ |
 | 9 | Accounts + multi-user sessions | ⬜ |
 | 10 | Browser camera | ⬜ |
