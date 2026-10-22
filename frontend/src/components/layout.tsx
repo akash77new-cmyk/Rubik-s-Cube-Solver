@@ -16,6 +16,7 @@ import {
   IconRoute,
   IconScan,
   IconSettings,
+  IconSparkle,
   IconSun,
   IconTerminal,
 } from "@/components/Icons";
@@ -29,7 +30,8 @@ export type PageId =
   | "analytics"
   | "calibration"
   | "logs"
-  | "settings";
+  | "settings"
+  | "assistant";
 
 export const NAV: {
   group: string;
@@ -58,6 +60,12 @@ export const NAV: {
     ],
   },
   {
+    group: "AI",
+    items: [
+      { id: "assistant", label: "AI Assistant", icon: <IconSparkle />, hint: "Ask about your cube" },
+    ],
+  },
+  {
     group: "System",
     items: [
       { id: "logs", label: "Logs", icon: <IconTerminal />, hint: "Pipeline events" },
@@ -76,6 +84,7 @@ export const PAGE_META: Record<PageId, { title: string; subtitle: string }> = {
   calibration: { title: "HSV Calibration", subtitle: "Tune colour detection for your camera and lighting" },
   logs: { title: "Logs", subtitle: "Live event stream from the vision engine" },
   settings: { title: "Settings", subtitle: "Camera, overlays, playback and appearance" },
+  assistant: { title: "AI Assistant", subtitle: "Ask about your cube, your solution and your solves" },
 };
 
 /* ------------------------------------------------------------------ */

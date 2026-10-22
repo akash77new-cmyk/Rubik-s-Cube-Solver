@@ -12,6 +12,7 @@ import AnalyticsPage from "@/pages/AnalyticsPage";
 import CalibrationPage from "@/pages/CalibrationPage";
 import LogsPage from "@/pages/LogsPage";
 import SettingsPage from "@/pages/SettingsPage";
+import AssistantPage from "@/pages/AssistantPage";
 
 const PAGES: Record<PageId, (props: { navigate: (page: PageId) => void }) => ReactElement> = {
   dashboard: DashboardPage,
@@ -23,6 +24,7 @@ const PAGES: Record<PageId, (props: { navigate: (page: PageId) => void }) => Rea
   calibration: CalibrationPage,
   logs: LogsPage,
   settings: SettingsPage,
+  assistant: AssistantPage,
 };
 
 const VALID_PAGES = new Set(Object.keys(PAGES) as PageId[]);
@@ -72,6 +74,10 @@ export default function App() {
       ];
       if (digit >= 1 && digit <= 9) {
         navigate(order[digit - 1]);
+        return;
+      }
+      if (digit === 0) {
+        navigate("assistant");
         return;
       }
       if (event.key === " " && snapshot?.solution) {

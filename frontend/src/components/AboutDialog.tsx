@@ -35,6 +35,16 @@ const CAPABILITIES: { title: string; detail: string }[] = [
     detail:
       "Persisted solve history with move counts, solve times, move distribution and running average sticker confidence.",
   },
+  {
+    title: "Database",
+    detail:
+      "PostgreSQL (Neon) in production and SQLite locally, through SQLAlchemy. Alembic migrations run at start-up; reads come from memory, so the camera never waits for the network.",
+  },
+  {
+    title: "AI assistant",
+    detail:
+      "A Gemini tool-calling agent: it reads facts through read-only tools, answers through a schema-checked final_answer, and every step is traced. Without an API key it gives a built-in answer.",
+  },
 ];
 
 export function AboutDialog({ onClose }: { onClose: () => void }) {
@@ -60,7 +70,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
           <div>
             <h2 style={{ fontSize: 17 }}>Real-Time Rubik's Cube Solver</h2>
             <p style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
-              Python · OpenCV · NumPy · React · TypeScript · Socket programming
+              Python · OpenCV · NumPy · React · TypeScript · Socket programming · PostgreSQL · Gemini API
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose} style={{ marginLeft: "auto" }}>
@@ -82,7 +92,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
             Solver backend: <b>{snapshot?.solver.backend ?? "initialising"}</b>
           </span>
           <span>
-            Keyboard: <b>1-9</b> pages · <b>Space</b> play/pause · <b>←/→</b> step
+            Keyboard: <b>1-9</b> pages · <b>0</b> AI Assistant · <b>Space</b> play/pause · <b>←/→</b> step
           </span>
         </footer>
       </div>

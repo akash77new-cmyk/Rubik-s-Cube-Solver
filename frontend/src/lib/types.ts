@@ -324,7 +324,72 @@ export interface Snapshot {
   physicalSteps: string[];
   dataset: DatasetInfo;
   database: DatabaseInfo | null;
+  ai: AIStatus | null;
   timestamp: number;
+}
+
+/** The AI assistant's status (Phase 4). */
+export interface AIStatus {
+  enabled: boolean;
+  provider: string | null;
+  model: string | null;
+  /** Why AI is off, e.g. "no Gemini API key is set" */
+  offReason: string | null;
+  busy: boolean;
+  budget: { usedLastMinute: number; perMinute: number; usedToday: number; perDay: number };
+  lastError: string | null;
+}
+
+/** One answer from the assistant (the ai:answer event). */
+export interface AIAnswer {
+  runId: string;
+  question: string;
+  answer: string;
+  suggestions: string[];
+  /** "gemini", or "fallback" for the built-in answer */
+  source: string;
+  model: string | null;
+  /** Why the built-in answer was used */
+  reason: string | null;
+  requests: number;
+  toolCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
+  /** Only when the assistant itself failed; then the other fields are missing. */
+  error?: string;
+}
+
+/** The assistant is working: step 0 = thinking, then one event per tool call. */
+export interface AIProgress {
+  runId: string;
+  step: number;
+  tool: string | null;
+}
+
+export interface AITraceStep {
+  position: number;
+  kind: "model" | "tool" | "answer" | "error";
+  name: string;
+  detail: Record<string, unknown>;
+  durationMs: number;
+}
+
+/** One traced AI run with its steps (the ai:traces event). */
+export interface AITrace {
+  id: string;
+  feature: string;
+  question: string;
+  source: string;
+  reason: string | null;
+  model: string | null;
+  answer: { answer: string; suggestions?: string[] } | null;
+  requestCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  startedAt: number;
+  durationMs: number;
+  steps: AITraceStep[];
 }
 
 /** Where settings, HSV profiles and solve history are stored (Phase 3). */

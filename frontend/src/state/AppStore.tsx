@@ -19,6 +19,10 @@ import {
 } from "react";
 import { io, type Socket } from "socket.io-client";
 import type {
+  AIAnswer,
+  AIProgress,
+  AIStatus,
+  AITrace,
   AnalyticsInfo,
   CalibrationInfo,
   CameraInfo,
@@ -60,6 +64,8 @@ interface AppStoreValue {
   dismissToast: (id: number) => void;
   pushToast: (toast: Omit<Toast, "id">) => void;
   clearLogs: () => void;
+  /** The AI assistant's latest answer, live progress and recent traces (Phase 4). */
+  ai: { answer: AIAnswer | null; progress: AIProgress | null; traces: AITrace[] };
 }
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
@@ -70,6 +76,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [detection, setDetection] = useState<DetectionInfo | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [aiAnswer, setAiAnswer] = useState<AIAnswer | null>(null);
+  const [aiProgress, setAiProgress] = useState<AIProgress | null>(null);
+  const [aiTraces, setAiTraces] = useState<AITrace[]>([]);
   const socketRef = useRef<Socket | null>(null);
   const toastId = useRef(1);
 
@@ -174,6 +183,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           : { tone: "critical", title: "Database not reachable", message: data.error ?? "" },
       ),
     );
+    socket.on("ai:status", (data: AIStatus) => patch("ai", data));
+    socket.on("ai:progress", (data: AIProgress) => setAiProgress(data));
+    socket.on("ai:answer", (data: AIAnswer) => {
+      setAiProgress(null);
+      setAiAnswer(data);
+    });
+    socket.on("ai:traces", (data: AITrace[]) => setAiTraces(Array.isArray(data) ? data : []));
+    socket.on("ai:rejected", (data: { message: string }) =>
+      pushToast({ tone: "warning", title: "Assistant", message: data.message }),
+    );
     socket.on("engine:disconnected", () =>
       pushToast({ tone: "warning", title: "Vision engine disconnected" }),
     );
@@ -227,8 +246,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       pushToast,
       dismissToast,
       clearLogs,
+      ai: { answer: aiAnswer, progress: aiProgress, traces: aiTraces },
     }),
-    [connection, snapshot, detection, logs, toasts, send, pushToast, dismissToast, clearLogs],
+    [
+      connection, snapshot, detection, logs, toasts, send, pushToast, dismissToast, clearLogs,
+      aiAnswer, aiProgress, aiTraces,
+    ],
   );
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>;
