@@ -16,8 +16,9 @@ docs/phases/
 .cache/
 
 # Runtime state written by the app: the local SQLite database (data/cube.db) and
-# the old JSON files, kept as *.imported backups after Phase 3's one-time import
-data/
+# the old JSON files, kept as *.imported backups after Phase 3's one-time import.
+# The leading "/" matters: only the top-level data/ folder, never ml/data/ (the dataset).
+/data/
 
 # Node
 node_modules/
