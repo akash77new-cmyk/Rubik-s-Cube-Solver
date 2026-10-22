@@ -315,6 +315,38 @@ def run_offline() -> None:
         assert session.snapshot()["validation"]["ok"], "still invalid after Apply"
         return f"1 misread sticker -> {search.total} proven fix -> scripted agent chose it -> Apply -> valid cube"
 
+    @check("RAG · lessons embedded and searched; the coach cites only what it found")
+    def _() -> str:
+        from backend.ai.agent import FINAL_ANSWER
+        from backend.ai.budget import RequestBudget
+        from backend.ai.fake import HashEmbedder, ScriptedLLM, tool_call
+        from backend.ai.lessons import evaluate, load_lessons
+        from backend.ai.retrieval import LessonIndex
+        from backend.ai.service import AIService
+        from backend.db import connect
+
+        # Test embeddings (tests never call real APIs) in a throwaway SQLite database.
+        index = LessonIndex(load_lessons(), connect("sqlite://"), HashEmbedder())
+        index.sync()
+        assert index.status()["embedded"] == len(index.chunks), index.status()
+        vectors = evaluate(lambda q: [hit.chunk.id for hit in index.search(q, 3).hits])
+        keywords = evaluate(lambda q: [chunk.id for chunk, _ in index.keywords.search(q, 3)])
+        assert vectors["hits"] >= 13 and keywords["hits"] >= 13, (vectors, keywords)
+
+        notation = "02-notation#clockwise-primes-and-doubles"
+        llm = ScriptedLLM([
+            tool_call("search_lessons", query="What does R prime mean?"),
+            tool_call(FINAL_ANSWER, answer="Anticlockwise.", citations=[notation], covered=True),
+        ])
+        payload = AIService(llm, RequestBudget(10, 100), None, lambda e, d: None, lessons=index).coach_answer(
+            "What does R prime mean?"
+        )
+        assert payload["citations"] == [notation] and payload["sources"][0]["id"] == notation, payload
+        return (
+            f"{len(index.chunks)} sections; recall@3 {vectors['hits']}/{vectors['total']} with test embeddings, "
+            f"{keywords['hits']}/{keywords['total']} with keywords; the coach cited {notation}"
+        )
+
     @check("dataset · a scanned cube is saved as 54 labelled sticker crops")
     def _() -> str:
         import json
@@ -567,6 +599,19 @@ def run_live(url: str, expect_db: str | None = None, expect_ai: str | None = Non
             assert wait_for(lambda: state["validation"]["ok"]), "the cube is still invalid after Apply"
         how = repair["model"] if repair["source"] != "search" else f"built-in search ({repair['reason'] or 'no AI'})"
         return f"{how}: {repair['action']}, {repair['fixesFound']} proven fix(es); {repair['message'][:60]}"
+
+    @check("live · RAG coach answers from the lessons, with citations")
+    def _() -> str:
+        answers: list = []
+        client.on("coach:answer", lambda data: answers.append(data))
+        command("coach.ask", {"question": "What does R prime mean?"}, settle=0.2)
+        assert wait_for(lambda: bool(answers), timeout=90), "no coach:answer event within 90 s"
+        answer = answers[-1]
+        assert answer.get("answer") and answer.get("citations"), f"no cited answer: {answer}"
+        if expect_ai:
+            assert answer["source"] == expect_ai, f"expected {expect_ai}, got {answer['source']}: {answer['reason']}"
+        how = answer["model"] if answer["source"] != "fallback" else f"built-in answer ({answer['reason']})"
+        return f"{how}; search: {answer['search']}; cites {', '.join(answer['citations'])}"
 
     @check("live · engine streams structured logs")
     def _() -> str:

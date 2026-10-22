@@ -12,16 +12,24 @@ It answers ``generateContent`` the way Gemini 3 does, and is strict where Gemini
 
 It is not a model. For the Cube Assistant it calls get_solution, then answers with
 final_answer from what the tool returned. For the Smart Repair Agent (Phase 5) it calls
-find_fixes, then picks the first fix, or asks for a rescan if there is none.
-tests/test_ai_end_to_end.py uses it too.
+find_fixes, then picks the first fix, or asks for a rescan if there is none. For the RAG
+coach (Phase 7) it calls search_lessons with the question, then cites the first passage.
+``batchEmbedContents`` returns word-hash vectors (see backend/ai/fake.py), so lesson
+search works end to end. tests/test_ai_end_to_end.py uses it too.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from typing import Any, Dict, Tuple
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so "backend" imports work
+
+from backend.ai.fake import hash_vector  # noqa: E402 - needs the path above
 
 KEY = "test-key"
 
@@ -65,6 +73,16 @@ def answer(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
         return _error(400, "No contents")
     results = [part["functionResponse"] for part in contents[-1].get("parts", []) if "functionResponse" in part]
     tools = {d["name"] for tool in body.get("tools", []) for d in tool.get("functionDeclarations", [])}
+    if "search_lessons" in tools:  # the RAG coach
+        if not results:
+            question = contents[0]["parts"][0].get("text", "")
+            return 200, _call("search_lessons", {"query": question})
+        passages = results[0].get("response", {}).get("passages", [])
+        if not passages:
+            return 200, _call("final_answer", {"answer": "The lessons don't cover that.", "citations": [], "covered": False})
+        first = passages[0]
+        text = f"The lesson \"{first['section']}\" covers this: {first['text'].split('. ')[0]}."
+        return 200, _call("final_answer", {"answer": text[:900], "citations": [first["id"]], "covered": True})
     if "find_fixes" in tools:  # the Smart Repair Agent
         if not results:
             return 200, _call("find_fixes", {})
@@ -83,11 +101,22 @@ def answer(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
     return 200, _call("final_answer", {"answer": text, "suggestions": ["How do I do step 1?"]})
 
 
+def embed(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+    """A batchEmbedContents answer: one vector per request, in order."""
+    vectors = []
+    for request in body.get("requests") or []:
+        text = request["content"]["parts"][0]["text"]
+        vectors.append({"values": hash_vector(text, int(request.get("outputDimensionality", 768)))})
+    return 200, {"embeddings": vectors}
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802 - the http.server API
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])) or b"{}")
         if self.headers.get("x-goog-api-key") != KEY:
             status, payload = _error(403, f"API key not valid (the fake Gemini expects {KEY!r})")
+        elif self.path.endswith(":batchEmbedContents"):
+            status, payload = embed(body)
         elif not self.path.endswith(":generateContent"):
             status, payload = _error(404, f"Unknown path {self.path}")
         else:
