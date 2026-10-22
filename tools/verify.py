@@ -268,6 +268,53 @@ def run_offline() -> None:
         assert fallback["source"] == "fallback" and "Your cube is solved." in fallback["answer"], fallback
         return "scripted model -> get_cube_state -> schema-checked answer, 4 steps traced; no key -> built-in answer"
 
+    @check("repair · a misread sticker: a proven fix, chosen by the agent, applied -> valid")
+    def _() -> str:
+        from backend.ai.agent import FINAL_ANSWER
+        from backend.ai.budget import RequestBudget
+        from backend.ai.fake import ScriptedLLM, tool_call, tool_calls
+        from backend.ai.repair_agent import RepairContext
+        from backend.ai.service import AIService
+        from backend.core.repair import find_repairs
+        from backend.core.solver import SolverEngine
+        from backend.services.logbus import LogBus
+        from backend.services.session import SolveSession
+
+        moves = random_scramble(20, seed=9)
+        truth = CubeState.solved().apply_sequence(moves)
+        facelets = truth.facelets
+        true_color = facelets["U"][1]
+        wrong = next(code for code in "WYROGB" if code != true_color)
+        facelets["U"][1] = wrong  # what a camera that misread one sticker reports
+        scan = CubeState(facelets)
+        assert not scan.validate().ok, "the misread cube should be invalid"
+
+        # 1. Code proves: exactly one 1-sticker change makes it valid, and it is the right one.
+        search = find_repairs(scan)
+        assert search.total == 1 and search.candidates[0].apply(scan) == truth, f"search found {search.total} fixes"
+
+        # 2. The agent (a scripted model: tests never call real APIs) picks that fix by its id.
+        llm = ScriptedLLM([
+            tool_calls(("get_problems", {}), ("get_suspect_stickers", {}), ("find_fixes", {})),
+            tool_call(FINAL_ANSWER, action="apply_fix", fix_id=1, message="Fix 1."),
+        ])
+        proposal = AIService(llm, RequestBudget(10, 100), None, lambda e, d: None).repair(RepairContext(scan))
+        assert proposal["source"] == "scripted" and proposal["changes"][0]["to"] == true_color, proposal
+
+        # 3. The session: repair.start -> a proposal -> repair.apply -> a valid cube.
+        session = SolveSession(
+            **memory_stores(), solver=SolverEngine(), logs=LogBus(),
+            publish_event=lambda event, data: None, publish_frame=lambda jpeg: None,
+        )
+        session.handle_command("cube.reset", {})
+        session.handle_command("cube.apply", {"moves": " ".join(move.notation for move in moves)})
+        session.handle_command("cube.sticker", {"face": "U", "index": 1, "color": wrong})
+        session.handle_command("repair.start", {})
+        assert session.snapshot()["repair"]["status"] == "ready", session.snapshot()["repair"]
+        assert session.handle_command("repair.apply", {}) == {"ok": True, "valid": True}
+        assert session.snapshot()["validation"]["ok"], "still invalid after Apply"
+        return f"1 misread sticker -> {search.total} proven fix -> scripted agent chose it -> Apply -> valid cube"
+
     @check("dataset · a scanned cube is saved as 54 labelled sticker crops")
     def _() -> str:
         import json
@@ -498,6 +545,28 @@ def run_live(url: str, expect_db: str | None = None, expect_ai: str | None = Non
             assert answer["source"] == expect_ai, f"expected {expect_ai}, got {answer['source']}: {answer['reason']}"
         how = answer["model"] if answer["source"] != "fallback" else f"built-in answer ({answer['reason']})"
         return f"{how}, {answer['durationMs']} ms, {answer['requests']} request(s): {answer['answer'][:70]}"
+
+    @check("live · repair agent fixes a broken cube (Gemini, or the built-in search)")
+    def _() -> str:
+        command("cube.scramble", settle=0.3)
+        old = state["cube"]["facelets"]["U"][1]
+        wrong = next(code for code in "WYROGB" if code != old)
+        command("cube.sticker", {"face": "U", "index": 1, "color": wrong}, settle=0.3)
+        assert wait_for(lambda: state["validation"] and not state["validation"]["ok"]), "the broken cube is valid"
+        command("repair.start", settle=0.2)
+
+        def ready() -> bool:
+            return (state.get("repair") or {}).get("status") == "ready"
+
+        assert wait_for(ready, timeout=90), "no repair proposal within 90 s"
+        repair = state["repair"]
+        if expect_ai:
+            assert repair["source"] == expect_ai, f"expected {expect_ai}, got {repair['source']}: {repair['reason']}"
+        if repair["action"] == "apply_fix":
+            command("repair.apply", settle=0.2)
+            assert wait_for(lambda: state["validation"]["ok"]), "the cube is still invalid after Apply"
+        how = repair["model"] if repair["source"] != "search" else f"built-in search ({repair['reason'] or 'no AI'})"
+        return f"{how}: {repair['action']}, {repair['fixesFound']} proven fix(es); {repair['message'][:60]}"
 
     @check("live · engine streams structured logs")
     def _() -> str:

@@ -10,8 +10,10 @@ It answers ``generateContent`` the way Gemini 3 does, and is strict where Gemini
 - each function call it sends has an id and a thought signature, and a later request that
   drops or changes a signature gets HTTP 400, like on the real API.
 
-It is not a model: it always calls get_solution first, then answers with final_answer, using
-only what the tool returned. tests/test_ai_end_to_end.py uses it too.
+It is not a model. For the Cube Assistant it calls get_solution, then answers with
+final_answer from what the tool returned. For the Smart Repair Agent (Phase 5) it calls
+find_fixes, then picks the first fix, or asks for a rescan if there is none.
+tests/test_ai_end_to_end.py uses it too.
 """
 
 from __future__ import annotations
@@ -62,6 +64,15 @@ def answer(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
     if not contents:
         return _error(400, "No contents")
     results = [part["functionResponse"] for part in contents[-1].get("parts", []) if "functionResponse" in part]
+    tools = {d["name"] for tool in body.get("tools", []) for d in tool.get("functionDeclarations", [])}
+    if "find_fixes" in tools:  # the Smart Repair Agent
+        if not results:
+            return 200, _call("find_fixes", {})
+        fixes = results[0].get("response", {}).get("fixes", [])
+        if fixes:
+            message = f"Fix {fixes[0]['id']} is the most likely: the camera doubted those stickers."
+            return 200, _call("final_answer", {"action": "apply_fix", "fix_id": fixes[0]["id"], "message": message})
+        return 200, _call("final_answer", {"action": "rescan_side", "side": "U", "message": "Rescan the top side."})
     if not results:
         return 200, _call("get_solution", {})
     data = results[0].get("response", {})

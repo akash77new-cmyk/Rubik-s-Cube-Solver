@@ -1,5 +1,7 @@
 """The whole AI path against tools/fake_gemini.py: real HTTP, thought signatures, tools, trace.
 
+Both features: the Cube Assistant and the Smart Repair Agent.
+
 No internet and no real key: the fake server runs on 127.0.0.1 inside the test.
 """
 
@@ -9,10 +11,11 @@ from http.server import HTTPServer
 import pytest
 
 from backend.ai.assistant import SnapshotContext
+from backend.ai.repair_agent import RepairContext
 from backend.ai.service import AIConfig, AIService
 from backend.ai.tracing import TraceStore
 from backend.db import connect
-from tests.sessions import new_session, with_solution
+from tests.sessions import misread, new_session, readings_for, real_cube, with_solution
 from tools.fake_gemini import KEY, Handler, answer
 
 
@@ -43,6 +46,14 @@ def test_a_question_end_to_end(fake_gemini):
 def test_a_wrong_key_falls_back(fake_gemini):
     payload = ask(fake_gemini, "wrong-key")
     assert payload["source"] == "fallback" and payload["reason"] == "Gemini rejected the API key"
+
+
+def test_a_repair_end_to_end(fake_gemini):
+    ai = AIService.create(AIConfig(api_key=KEY, model="gemini-test", base_url=fake_gemini), None, lambda e, d: None)
+    scan = misread(real_cube(), {("U", 1): "O"})
+    proposal = ai.repair(RepairContext(scan, readings_for(scan, {("U", 1): ("O", "R", 0.51, 0.48)})))
+    assert (proposal["source"], proposal["action"], proposal["requests"]) == ("gemini", "apply_fix", 2)
+    assert [(c["face"], c["index"], c["to"]) for c in proposal["changes"]] == [("U", 1, "R")]
 
 
 def test_the_fake_is_strict_about_thought_signatures():
