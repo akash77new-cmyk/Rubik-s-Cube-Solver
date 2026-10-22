@@ -51,7 +51,7 @@ def test_check_reports_version_and_schema(open_db):
     database = open_db()
     status = database.status()
     assert status["connected"] is True and status["error"] is None
-    assert status["schemaRevision"] == head_revision() == "0001"
+    assert status["schemaRevision"] == head_revision() == "0002"
     assert status["serverVersion"]
     if database.dialect == "sqlite":
         assert status["pgvector"] is None

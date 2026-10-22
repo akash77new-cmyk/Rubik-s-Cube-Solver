@@ -1,11 +1,12 @@
 """Database tables, as SQLAlchemy ORM classes.
 
-Three tables replace the three JSON files used before Phase 3:
+Phase 3's three tables replaced the JSON files used before; Phase 4 added two:
 
 ========================  =====================================================
 ``app_settings``          the Settings page (one row, all settings as JSON)
 ``color_profiles``        HSV profiles saved on the Calibration page
 ``solves``                solve history behind the Analytics page
+``ai_runs``, ``ai_steps``  traces of AI runs (Phase 4): see backend/ai/tracing.py
 ========================  =====================================================
 
 Built-in HSV presets stay in code (``backend/core/color.py``): they are part of the
@@ -20,7 +21,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from sqlalchemy import JSON, DateTime, Float, Integer, MetaData, String, Text
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, MetaData, String, Text, UniqueConstraint
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
@@ -119,3 +120,39 @@ class SolveRow(Base):
     turn_distribution: Mapped[Dict[str, int]] = mapped_column(JSON)
     detection_confidence: Mapped[float] = mapped_column(Float)
     source: Mapped[str] = mapped_column(String(16))
+
+
+class AIRunRow(Base):
+    """One AI run: the question, where the answer came from, and totals."""
+
+    __tablename__ = "ai_runs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    feature: Mapped[str] = mapped_column(String(32))  # e.g. "assistant"
+    question: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(16))  # "gemini" or "fallback"
+    reason: Mapped[Optional[str]] = mapped_column(Text)  # why the fallback was used
+    model: Mapped[Optional[str]] = mapped_column(String(64))
+    answer: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)
+    request_count: Mapped[int] = mapped_column(Integer)
+    input_tokens: Mapped[int] = mapped_column(Integer)
+    output_tokens: Mapped[int] = mapped_column(Integer)
+    #: Indexed: the AI page lists the newest runs first.
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
+    duration_ms: Mapped[int] = mapped_column(Integer)
+
+
+class AIStepRow(Base):
+    """One step of a run: a model request, a tool call, the answer, or an error."""
+
+    __tablename__ = "ai_steps"
+    __table_args__ = (UniqueConstraint("run_id", "position"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(32), ForeignKey("ai_runs.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)  # 1, 2, 3 ... within the run
+    kind: Mapped[str] = mapped_column(String(16))  # "model", "tool", "answer" or "error"
+    name: Mapped[str] = mapped_column(String(64))  # model name or tool name
+    detail: Mapped[Dict[str, Any]] = mapped_column(JSON)
+    duration_ms: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)

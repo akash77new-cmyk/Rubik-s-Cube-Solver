@@ -36,7 +36,7 @@ def alembic_config() -> Config:
 
 
 def head_revision() -> str:
-    """The newest migration in the code, e.g. ``"0001"``."""
+    """The newest migration in the code, e.g. ``"0002"``."""
     head = ScriptDirectory.from_config(alembic_config()).get_current_head()
     assert head is not None, "no migrations found"
     return head
