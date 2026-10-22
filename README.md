@@ -336,7 +336,7 @@ The schema is versioned with Alembic. The engine applies new migrations when it 
 there is nothing to run by hand. To change a table:
 
 1. change the class in `backend/db/models.py`;
-2. `python -m alembic revision --autogenerate --rev-id 0002 -m "what changed"`, then read and
+2. `python -m alembic revision --autogenerate --rev-id 0003 -m "what changed"`, then read and
    tidy the generated file in `backend/db/migrations/versions/`;
 3. run `pytest`: `test_models_match_the_migrations` fails if the two disagree.
 
