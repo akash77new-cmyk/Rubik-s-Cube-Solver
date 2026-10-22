@@ -40,6 +40,7 @@ rotation arrows drawn over the live feed, and an analytics dashboard tracking ev
 | **Database** | PostgreSQL (Neon) in production, SQLite locally, through SQLAlchemy. Alembic migrations run automatically at start-up. Reads are served from memory, so the camera loop never waits for the network; writes go to the database first. |
 | **AI assistant** | A tool-calling agent on Google Gemini answers questions about your cube, your solution and your solves. Every fact comes from five read-only tools computed by the app, the answer must pass a JSON-schema check, and every model request and tool call is traced in the database. A request budget protects the free quota, and without AI the same tools give a built-in answer. |
 | **Guided scanning** | Colour-only step guide; faces identified by their centre colour (no duplicates, any order); mirrored previews un-mirrored; orientation mistakes repaired by a smallest-change search that only applies unique fixes. |
+| **Smart repair** | When a scan is unsolvable, a search finds every 1- or 2-sticker change that makes the cube valid (the validator decides), ranked by how unsure the camera was. A Gemini agent reads the problems, the doubtful stickers and these proven fixes, then picks one by its id or asks for a rescan, and explains why. Nothing changes until the user presses Apply; without AI the search's best fix is proposed. |
 | **Plain-English moves** | A "hold the cube like this" step comes first; then every move says which way to turn, seen from where you are ("Turn the top layer to the left."), including back-layer moves. Arrows and instructions are checked against the cube model by tests. |
 | **Training-data collection** | Every sticker keeps its reading: colour, confidence, the best three colours, and whether the detector was unsure. Confirmed scans are saved as 54 labelled 32×32 sticker crops (`ml/data/`), balanced by design and with corrected stickers marked as hard examples. |
 
@@ -113,6 +114,11 @@ Each face tile fills in as it lands, and full validation (colours, pieces, twist
 runs before the solver is allowed to start, and the stickers behind each problem are outlined on
 the net. Unsure stickers get a dashed amber outline, and hovering a sticker shows what the camera
 saw. After a valid scan, the Training data card saves it to the dataset.
+
+If the six sides don't make a solvable cube, the **Smart repair** card appears beside the
+camera: "the top sticker of the White side is red, not orange (the camera was 51% sure)",
+with the stickers outlined on the net. **Apply fix** changes them; **Rescan** retakes that
+side. As soon as the cube is valid, the camera turns off.
 
 ![Scanner](docs/screenshots/03-scanner.png)
 
@@ -233,6 +239,7 @@ backend/
     validation.py      structured validation issues
     moves.py           Singmaster notation, metadata, plain-English instructions, physical turns
     scanning.py        scan guide, face identification, orientation repair
+    repair.py          finds the misread stickers: 1- or 2-sticker fixes the validator accepts
     solver.py          SolverEngine + pluggable Kociemba backends
     color.py           HSV boxes, classification with confidence, built-in presets
   ai/                  the AI layer (Phase 4; only the engine uses it)
@@ -245,6 +252,7 @@ backend/
     budget.py          requests per minute and per day
     tracing.py         every model request and tool call, saved in the database
     assistant.py       the Cube Assistant: tools, prompt, built-in answer
+    repair_agent.py    the Smart Repair Agent: tools, prompt, answer rules, built-in answer
     service.py         runs it in a background thread and publishes the answers
   db/
     database.py        engine, transactions, connection status (no secrets shown)
@@ -312,8 +320,8 @@ python -m pip install -r requirements-dev.txt   # app + pytest + Socket.IO clien
 
 pytest                          # unit tests (about 40 s: scanning tests run the real detector)
 pytest -m "not slow"            # skip the solver tests
-python tools/verify.py          # end-to-end pipeline check (14 offline checks)
-python tools/verify.py --live   # + 8 checks against a running app (python run.py --headless)
+python tools/verify.py          # end-to-end pipeline check (15 offline checks)
+python tools/verify.py --live   # + 9 checks against a running app (python run.py --headless)
 ```
 
 The unit tests live in `tests/`. They never touch your real `data/` folder or a real database:

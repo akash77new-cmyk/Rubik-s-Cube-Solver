@@ -152,6 +152,17 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 - Tests: `ScriptedLLM` (`fake.py`) for unit tests; `tools/fake_gemini.py`, a local server as strict
   as Gemini 3 (key header, mode ANY, thought signatures), for end-to-end tests without a key.
 
+### 4b. The Smart Repair Agent (Phase 5)
+- After the 6th side, an unsolvable scan starts `SolveSession._start_repair()`. The search in
+  `backend/core/repair.py` finds every 1- or 2-sticker change the validator accepts (centres
+  never change), ranked by the camera's doubt. The agent (`backend/ai/repair_agent.py`) can
+  only pick one of these fixes **by id** (`AgentTask.answer_check` enforces it) or ask for a
+  rescan; the changes shown and applied always come from code, never from the model.
+- The proposal lives in the snapshot's `repair` key, tied to the cube it was made for: if the
+  cube changes (rescan, edit), it disappears and a late answer is ignored.
+- `repair.apply` (the user's Apply) is the only way a proposal changes the cube (rule 7).
+- A valid scan, or a fix that makes the cube valid, turns the camera off.
+
 ## 5. Deployment constraints (Render free tier)
 - **512 MB RAM, 0.1 CPU.** Phase 0 baseline is about 160 MB for all processes. Measure memory
   when adding heavy dependencies. Phase 3 (SQLAlchemy, Alembic, psycopg) adds about 50 MB to
@@ -207,7 +218,7 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 | 2B | Guided scanning: centre-based face identity, un-mirroring, orientation repair | ✅ |
 | 3 | Database: Neon Postgres, SQLAlchemy, Alembic (pgvector available for Phase 7) | ✅ |
 | 4 | AI foundation: LLM client, tool registry, tracing, fallbacks (+ AI Assistant) | ✅ |
-| 5 | Smart Repair Agent | ⬜ |
+| 5 | Smart Repair Agent (in the Scanner: proven fixes, agent picks, user applies) | ✅ |
 | 6 | Beginner (layer-by-layer) solver + solution stages | ⬜ |
 | 7 | Lessons + RAG Coach | ⬜ |
 | 8 | AI Tutor | ⬜ |
