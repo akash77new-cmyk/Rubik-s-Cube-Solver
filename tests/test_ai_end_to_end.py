@@ -60,12 +60,12 @@ def test_the_coach_end_to_end_with_embeddings(fake_gemini):
     indexed = threading.Event()
 
     def publish(event, data):
-        if event == "ai:status" and data["lessons"]["embedded"] == 35:
+        if event == "ai:status" and data["lessons"]["embedded"] == 37:
             indexed.set()
 
     config = AIConfig(api_key=KEY, model="gemini-test", base_url=fake_gemini, embed_model="gemini-embedding-001")
     ai = AIService.create(config, None, publish, database=connect("sqlite://"))
-    ai.start_lessons()  # embeds all 35 lesson sections through the fake server
+    ai.start_lessons()  # embeds all 37 lesson sections through the fake server
     assert indexed.wait(10)
     payload = ai.coach_answer("Which way do I turn B?")
     assert (payload["source"], payload["search"], payload["covered"]) == ("gemini", "vectors in Python", True)

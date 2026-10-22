@@ -23,14 +23,14 @@ def test_sync_embeds_once_and_search_uses_the_database(open_db):
     index = LessonIndex(load_lessons(), database, embedder)
     assert index.search("Which way do I turn B?").method == "keywords"  # not synced yet
     index.sync()
-    assert embedder.documents == [35] and index.status()["embedded"] == 35
+    assert embedder.documents == [37] and index.status()["embedded"] == 37
     expected = "pgvector" if database.dialect == "postgresql" else "vectors in Python"
     result = index.search("Which way do I turn B?")
     assert result.method == expected and result.hits[0].chunk.id == "02-notation#the-tricky-sides-b-l-and-d"
     assert evaluate(lambda q: [hit.chunk.id for hit in index.search(q, 3).hits])["hits"] >= 13
 
     LessonIndex(load_lessons(), database, embedder).sync()  # "a restart": nothing changed
-    assert embedder.documents == [35]  # nothing new to embed
+    assert embedder.documents == [37]  # nothing new to embed
 
 
 def test_only_changed_sections_are_embedded_again(open_db):
@@ -40,9 +40,9 @@ def test_only_changed_sections_are_embedded_again(open_db):
     lessons = load_lessons()
     lessons[0] = parse_lesson("01-the-cube", "# The cube\n\nShort.\n\n## Three kinds of pieces\nChanged text.\n")
     LessonIndex(lessons, database, embedder).sync()
-    assert embedder.documents == [35, 1]  # one changed section; the 3 removed ones are deleted
+    assert embedder.documents == [37, 1]  # one changed section; the 3 removed ones are deleted
     with database.transaction("count") as session:
-        assert len(session.scalars(select(LessonEmbeddingRow.id)).all()) == 32
+        assert len(session.scalars(select(LessonEmbeddingRow.id)).all()) == 34
 
 
 def test_without_working_embeddings_search_falls_back_to_keywords(open_db):
