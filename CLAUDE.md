@@ -55,6 +55,8 @@ vision engine (process 1)  backend/engine.py         single source of truth
    • issues           backend/core/validation.py    structured validation issues
    • scanning         backend/core/scanning.py      scan guide, centre-based face identity, orientation repair
    • DatasetStore     backend/services/dataset.py   confirmed scans → labelled crops
+   • LearnSession     backend/services/learn.py     Solve & Learn: the learner's cube, stages, hints (Phase 8)
+   • beginner method  backend/core/beginner.py      7 stages: stage checks, next step, exact moves (Phase 8)
    • AIService        backend/ai/service.py         the AI assistant: Gemini, tools, traces (Phase 4)
    • stores           backend/services/settings.py, profiles.py, analytics.py
    │                  memory copy for reads, written through to the database
@@ -174,6 +176,24 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 - Embedding requests go through the same budget as model requests.
 - `backend/ai/lessons.py` has an evaluation set (`EVAL_QUESTIONS`): recall@3 must stay ≥ 13 of 15.
 
+### 4d. Solve & Learn and the AI Tutor (Phase 8)
+- The learner scans once, then solves their real cube with the beginner method (7 stages,
+  `backend/core/beginner.py`). They tap every move they make (or follow "Show me"), so
+  `LearnSession` (`backend/services/learn.py`) always knows their exact cube.
+- Code decides everything about the cube: `current_stage()` from the stickers, `next_step()`
+  for the piece, its place and the exact moves (always checked by simulation). The method's
+  rules (L at the back-left, the Sune rules, headlights at the back...) are tested on random cubes.
+- The tutor (`backend/ai/tutor.py`) only writes words: hints 1-2, answers to "why?" (with
+  `search_lessons` and checked citations) and the recap. Hint 3 (the moves) comes from code.
+- `TutorContext.check_answer` rejects any move sequence (2+ moves) that code didn't allow for
+  that request (none for hint 1), and citations the search didn't return.
+- The learner's frame: white on top for stages 1-2, then turned over (yellow on top, the same
+  colour in front). No other whole-cube rotation; moves for other sides are relabelled.
+- Lesson 5's sections are the stages (`Stage.lesson`); its algorithms match `ALGORITHMS`.
+- `LearnSession.stage` is what the stickers show now and drops for a moment mid-algorithm;
+  the UI's stage bar follows `working_stage` (the first stage not finished; Undo un-finishes).
+  Shown moves stop as soon as their stage is done (the corner trick's last D isn't needed).
+
 ## 5. Deployment constraints (Render free tier)
 - **512 MB RAM, 0.1 CPU.** Phase 0 baseline is about 160 MB for all processes. Measure memory
   when adding heavy dependencies. Phase 3 (SQLAlchemy, Alembic, psycopg) adds about 50 MB to
@@ -183,7 +203,7 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 - One gunicorn worker with threads: Socket.IO state lives in memory, so never add workers.
 - Production solver: `kociemba` (C) from `requirements-prod.txt`. The pure-Python fallback needs
   large tables; don't rely on it in production.
-- **Until Phase 9 the live site has one shared session for every visitor.**
+- **Until Phase 9 the live site has one shared session for every visitor** (Solve & Learn too).
 - Keep per-frame server work light (0.1 CPU).
 - Dataset collection is off in production (`CUBE_DATASET_ENABLED`); `ml/data/` is committed to git.
 - **Database: Neon free tier** (Singapore, same region as Render). `DATABASE_URL` = the
@@ -230,9 +250,9 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 | 3 | Database: Neon Postgres, SQLAlchemy, Alembic (pgvector available for Phase 7) | ✅ |
 | 4 | AI foundation: LLM client, tool registry, tracing, fallbacks (+ AI Assistant) | ✅ |
 | 5 | Smart Repair Agent (in the Scanner: proven fixes, agent picks, user applies) | ✅ |
-| 6 | Beginner (layer-by-layer) solver + solution stages | ⬜ |
+| 6 | Beginner (layer-by-layer) solver + solution stages | ✅ (built in Phase 8) |
 | 7 | Lessons + RAG Coach (pgvector, cited answers) | ✅ |
-| 8 | AI Tutor | ⬜ |
+| 8 | Solve & Learn + AI Tutor (beginner method, hints, checked moves) | ✅ |
 | 9 | Accounts + multi-user sessions | ⬜ |
 | 10 | Browser camera | ⬜ |
 | 11 | Trained colour classifier + vision-LLM fallback | ⬜ |

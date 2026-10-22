@@ -40,7 +40,8 @@ rotation arrows drawn over the live feed, and an analytics dashboard tracking ev
 | **Database** | PostgreSQL (Neon) in production, SQLite locally, through SQLAlchemy. Alembic migrations run automatically at start-up. Reads are served from memory, so the camera loop never waits for the network; writes go to the database first. |
 | **AI assistant** | A tool-calling agent on Google Gemini answers questions about your cube, your solution and your solves. Every fact comes from five read-only tools computed by the app, the answer must pass a JSON-schema check, and every model request and tool call is traced in the database. A request budget protects the free quota, and without AI the same tools give a built-in answer. |
 | **Guided scanning** | Colour-only step guide; faces identified by their centre colour (no duplicates, any order); mirrored previews un-mirrored; orientation mistakes repaired by a smallest-change search that only applies unique fixes. |
-| **RAG coach** | Eight short lessons, split into 35 sections and embedded with Gemini; the embeddings live in PostgreSQL with pgvector, and a question finds the nearest sections by cosine distance (NumPy locally, BM25 keywords without embeddings). The coach answers only from those sections and must cite them: every citation is checked against what the search returned. |
+| **RAG coach** | Eight short lessons, split into 37 sections and embedded with Gemini; the embeddings live in PostgreSQL with pgvector, and a question finds the nearest sections by cosine distance (NumPy locally, BM25 keywords without embeddings). The coach answers only from those sections and must cite them: every citation is checked against what the search returned. |
+| **Solve & Learn** | Learn the beginner method on your own cube: scan once, then solve it in seven stages, tapping each move you make so the app always knows your cube. Code finds every step and its exact moves (tested on random cubes); an AI tutor gives hints in three levels and answers "why?" from the lessons, and any move sequence it writes must come from the app. |
 | **Smart repair** | When a scan is unsolvable, a search finds every 1- or 2-sticker change that makes the cube valid (the validator decides), ranked by how unsure the camera was. A Gemini agent reads the problems, the doubtful stickers and these proven fixes, then picks one by its id or asks for a rescan, and explains why. Nothing changes until the user presses Apply; without AI the search's best fix is proposed. |
 | **Plain-English moves** | A "hold the cube like this" step comes first; then every move says which way to turn, seen from where you are ("Turn the top layer to the left."), including back-layer moves. Arrows and instructions are checked against the cube model by tests. |
 | **Training-data collection** | Every sticker keeps its reading: colour, confidence, the best three colours, and whether the detector was unsure. Confirmed scans are saved as 54 labelled 32×32 sticker crops (`ml/data/`), balanced by design and with corrected stickers marked as hard examples. |
@@ -185,6 +186,14 @@ the beginner method, how the solver works, …). Ask the coach a question: it se
 lessons, answers in a few sentences, and lists its sources; click one to jump to that
 section. If the lessons don't cover a question, it says so instead of guessing.
 
+### 12 · Solve & Learn
+After a scan, choose **Solve & Learn** instead of Solve. Hold the cube as shown, then solve it
+yourself in seven stages (white cross, white corners, middle layer, yellow cross, yellow face,
+yellow corners, yellow edges). The 3D cube follows every move you tap, and the pieces of the
+current step light up. Stuck? **Hint** gives what to look at, then which algorithm; **Show me**
+plays the exact moves one at a time. Ask "why?" at any time: the tutor answers from the lessons
+and shows its sources. At the end, a recap says what you did alone and what to practise.
+
 ### Themes
 Three of them, switchable from the **Appearance** picker on the dashboard, the header button
 (which cycles) or Settings. Every surface, ink and chart colour has a counterpart in each.
@@ -247,6 +256,7 @@ backend/
     moves.py           Singmaster notation, metadata, plain-English instructions, physical turns
     scanning.py        scan guide, face identification, orientation repair
     repair.py          finds the misread stickers: 1- or 2-sticker fixes the validator accepts
+    beginner.py        the beginner method: 7 stages, stage checks, the next step and its moves
     solver.py          SolverEngine + pluggable Kociemba backends
     color.py           HSV boxes, classification with confidence, built-in presets
   ai/                  the AI layer (Phase 4; only the engine uses it)
@@ -264,6 +274,7 @@ backend/
     lessons.py         loads the lessons, splits them into sections, keyword search (BM25)
     retrieval.py       embeddings in the database; search with pgvector, NumPy or keywords
     coach.py           the RAG coach: search tool, prompt, citation checks, built-in answer
+    tutor.py           the AI Tutor: hints, "why?" answers and the recap; move and citation checks
   lessons/            the coach's lessons, one Markdown file each
   db/
     database.py        engine, transactions, connection status (no secrets shown)
@@ -282,6 +293,7 @@ backend/
     client.py          web-server-side client with auto-reconnect
   services/
     session.py         the state machine every UI page mirrors
+    learn.py           Solve & Learn: the learner's cube, stages, hints and guided moves
     settings.py        settings store (memory copy, written through to the database)
     profiles.py        HSV profile store: built-in presets + user profiles
     analytics.py       solve history + aggregate statistics
@@ -293,7 +305,7 @@ backend/
 frontend/src/
   state/AppStore.tsx   one socket → React state, one command channel back
   components/          cube (3D + net), move glyphs, charts, ui primitives
-  pages/               the eleven screens
+  pages/               the twelve screens
 
 ml/data/               sticker colour dataset (see ml/data/README.md)
 
@@ -333,8 +345,8 @@ python -m pip install -r requirements-dev.txt   # app + pytest + Socket.IO clien
 
 pytest                          # unit tests (about 40 s: scanning tests run the real detector)
 pytest -m "not slow"            # skip the solver tests
-python tools/verify.py          # end-to-end pipeline check (16 offline checks)
-python tools/verify.py --live   # + 10 checks against a running app (python run.py --headless)
+python tools/verify.py          # end-to-end pipeline check (17 offline checks)
+python tools/verify.py --live   # + 11 checks against a running app (python run.py --headless)
 ```
 
 The unit tests live in `tests/`. They never touch your real `data/` folder or a real database:
@@ -521,3 +533,5 @@ win over it.
 | `0` | AI Assistant |
 | `Space` | play / pause solution playback |
 | `←` `→` | step one move |
+| `U` `R` `F` `D` `L` `B` | Solve & Learn: that move (with `Shift`: counter-clockwise) |
+| `Backspace` | Solve & Learn: undo |
