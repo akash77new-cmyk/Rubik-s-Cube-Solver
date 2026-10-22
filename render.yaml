@@ -19,3 +19,7 @@ services:
       # variables when it updates an existing Blueprint, so add it there by hand.
       - key: DATABASE_URL
         sync: false
+      # Google AI Studio key for the AI features (Phase 4). Also a secret: add it in the
+      # dashboard by hand, like DATABASE_URL. Without it the AI Assistant gives built-in answers.
+      - key: GEMINI_API_KEY
+        sync: false

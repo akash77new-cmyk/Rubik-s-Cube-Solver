@@ -7,7 +7,7 @@
 **An end-to-end computer-vision pipeline that scans a physical 3×3 Rubik's Cube with a webcam
 and solves it with the Kociemba two-phase algorithm — wrapped in a real desktop-class UI.**
 
-`Python` · `OpenCV` · `NumPy` · `PostgreSQL` · `SQLAlchemy` · `React` · `TypeScript` · `Socket programming`
+`Python` · `OpenCV` · `NumPy` · `PostgreSQL` · `SQLAlchemy` · `Gemini API` · `React` · `TypeScript` · `Socket programming`
 
 </div>
 
@@ -38,6 +38,7 @@ rotation arrows drawn over the live feed, and an analytics dashboard tracking ev
 | **Real-time synchronisation** | One Socket.IO connection mirrors the engine snapshot into React. Every page reads the same state; every action is a single command going the other way. |
 | **Analytics** | Solve history in PostgreSQL: move counts, search times, execution times, move distribution and running average sticker confidence. |
 | **Database** | PostgreSQL (Neon) in production, SQLite locally, through SQLAlchemy. Alembic migrations run automatically at start-up. Reads are served from memory, so the camera loop never waits for the network; writes go to the database first. |
+| **AI assistant** | A tool-calling agent on Google Gemini answers questions about your cube, your solution and your solves. Every fact comes from five read-only tools computed by the app, the answer must pass a JSON-schema check, and every model request and tool call is traced in the database. A request budget protects the free quota, and without AI the same tools give a built-in answer. |
 | **Guided scanning** | Colour-only step guide; faces identified by their centre colour (no duplicates, any order); mirrored previews un-mirrored; orientation mistakes repaired by a smallest-change search that only applies unique fixes. |
 | **Plain-English moves** | A "hold the cube like this" step comes first; then every move says which way to turn, seen from where you are ("Turn the top layer to the left."), including back-layer moves. Arrows and instructions are checked against the cube model by tests. |
 | **Training-data collection** | Every sticker keeps its reading: colour, confidence, the best three colours, and whether the detector was unsure. Confirmed scans are saved as 54 labelled 32×32 sticker crops (`ml/data/`), balanced by design and with corrected stickers marked as hard examples. |
@@ -84,7 +85,7 @@ python -m backend.server.app # run just the web server
 
 ---
 
-## The nine screens
+## The screens
 
 ### 1 · Dashboard
 Animated hero cube, live system status for every stage, session statistics and quick actions.
@@ -163,6 +164,14 @@ reachable; if a change cannot be saved, a "Not saved" message says why.
 
 ![Settings](docs/screenshots/09-settings.png)
 
+### 10 · AI Assistant
+Ask about your cube, your solution or your solves ("How do I do step 1?"). A Gemini model
+calls the app's read-only tools (cube state, scan progress, solution, one move, solve history)
+and answers from their results; its answer is checked against a JSON schema before it is
+shown. The Status card shows the model and the request limits, and Recent runs shows every
+traced step. Without a `GEMINI_API_KEY`, or when a limit is reached, the assistant answers
+with the facts the app computed, and says so.
+
 ### Themes
 Three of them, switchable from the **Appearance** picker on the dashboard, the header button
 (which cycles) or Settings. Every surface, ink and chart colour has a counterpart in each.
@@ -189,6 +198,7 @@ accents become the only light in the frame, which is what lets the glow read as 
                     │   • OverlayRenderer          │
                     │   • SolveSession  (state)    │
                     │   • SolverEngine  (Kociemba) │
+                    │   • AIService     (Gemini)   │
                     └──────────────┬───────────────┘
                                    │ TCP :9999
                                    │ length-prefixed frames
@@ -225,11 +235,22 @@ backend/
     scanning.py        scan guide, face identification, orientation repair
     solver.py          SolverEngine + pluggable Kociemba backends
     color.py           HSV boxes, classification with confidence, built-in presets
+  ai/                  the AI layer (Phase 4; only the engine uses it)
+    llm.py             provider-neutral messages, tool calls and errors
+    gemini.py          Gemini over REST (generateContent), standard library only
+    fake.py            a scripted model: tests never call real APIs
+    schema.py          checks tool arguments and answers against a JSON Schema
+    tools.py           the tools a model may call, with an allowlist
+    agent.py           the tool-calling loop: step and time limits, final_answer
+    budget.py          requests per minute and per day
+    tracing.py         every model request and tool call, saved in the database
+    assistant.py       the Cube Assistant: tools, prompt, built-in answer
+    service.py         runs it in a background thread and publishes the answers
   db/
     database.py        engine, transactions, connection status (no secrets shown)
-    models.py          the tables: app_settings, color_profiles, solves
+    models.py          the tables: app_settings, color_profiles, solves, ai_runs, ai_steps
     migrate.py         runs Alembic migrations at start-up, retries while Neon wakes
-    migrations/        Alembic: env.py + versions/0001_initial_schema.py
+    migrations/        Alembic: env.py + versions/ (0001 initial schema, 0002 AI traces)
   vision/
     camera.py          threaded capture, FPS, device enumeration
     detector.py        the HSV segmentation pipeline
@@ -251,11 +272,12 @@ backend/
 frontend/src/
   state/AppStore.tsx   one socket → React state, one command channel back
   components/          cube (3D + net), move glyphs, charts, ui primitives
-  pages/               the nine screens
+  pages/               the ten screens
 
 ml/data/               sticker colour dataset (see ml/data/README.md)
 
 tools/
+  fake_gemini.py       a fake Gemini server: test the AI path without a key or internet
   generate_assets.py   generates every SVG in assets/
   rasterize.mjs        SVG → high-resolution PNG (sharp)
   screenshots.mjs      captures docs/screenshots (puppeteer)
@@ -290,12 +312,14 @@ python -m pip install -r requirements-dev.txt   # app + pytest + Socket.IO clien
 
 pytest                          # unit tests (about 40 s: scanning tests run the real detector)
 pytest -m "not slow"            # skip the solver tests
-python tools/verify.py          # end-to-end pipeline check (13 offline checks)
-python tools/verify.py --live   # + 7 checks against a running app (python run.py --headless)
+python tools/verify.py          # end-to-end pipeline check (14 offline checks)
+python tools/verify.py --live   # + 8 checks against a running app (python run.py --headless)
 ```
 
 The unit tests live in `tests/`. They never touch your real `data/` folder or a real database:
 `tests/conftest.py` points `CUBE_DATA_DIR` at a throwaway temp folder and ignores `DATABASE_URL`.
+AI tests use a scripted model (`backend/ai/fake.py`) and a local fake HTTP server: they never
+call Gemini, and they need no API key.
 
 Database tests run on SQLite. To run them on PostgreSQL as well, start a throwaway server in
 Docker and point `CUBE_TEST_POSTGRES_URL` at it (tests delete this app's tables there):
@@ -330,7 +354,12 @@ Runs the whole stack headlessly and checks: cube-model correctness over random s
 solver output verified by replaying it, socket framing across split TCP chunks, HSV
 classification on a synthetic cube face, database migrations and data surviving a restart,
 and a full scramble → solve → playback → analytics round trip over Socket.IO.
-`--live --expect-db postgresql` fails unless the running app uses PostgreSQL.
+`--live --expect-db postgresql` fails unless the running app uses PostgreSQL, and
+`--live --expect-ai gemini` fails unless the assistant's answer came from Gemini.
+To test the AI path end to end without a key or internet, run the fake Gemini server
+(`python tools/fake_gemini.py`), start the app with
+`GEMINI_API_KEY=test-key GEMINI_BASE_URL=http://127.0.0.1:8799/v1beta python run.py --headless`,
+then run `python tools/verify.py --live --expect-ai gemini`.
 
 Regenerate art and screenshots:
 
@@ -380,6 +409,7 @@ Analytics page. This is why the project has no hard dependency on a compiler.
 | table `app_settings` | camera, detection, overlay, playback, theme |
 | table `color_profiles` | user-saved HSV profiles |
 | table `solves` | solve history |
+| tables `ai_runs`, `ai_steps` | traces of AI runs (the newest 200) |
 | `ml/data/scans/` | saved training scans (committed) |
 | `.cache/twophase/` | generated pruning tables (safe to delete; rebuilt on demand) |
 
@@ -433,6 +463,9 @@ Its disk is temporary, but settings, profiles and solve history are in Neon, so 
 every deploy. Neon's free database also sleeps after 5 idle minutes; the first query after that
 wakes it in about a second, and the engine retries while it does.
 
+`GEMINI_API_KEY` is a secret too: add it on the same **Environment** page. Without it the
+live site still works, and the assistant gives its built-in answers.
+
 ### Environment variables
 
 Locally they can live in a `.env` file (copy `.env.example`); real environment variables always
@@ -450,6 +483,10 @@ win over it.
 | `CUBE_DATA_DIR` | `./data` | `./data` |
 | `CUBE_DATASET_ENABLED` | on | off |
 | `CUBE_DATASET_DIR` | `./ml/data` | `./ml/data` |
+| `GEMINI_API_KEY` | not set: AI off, built-in answers | optional secret (Render dashboard) |
+| `GEMINI_MODEL` | `gemini-3.5-flash-lite` | same |
+| `GEMINI_THINKING_LEVEL` | not set: the model's default | same |
+| `AI_REQUESTS_PER_MINUTE` / `AI_REQUESTS_PER_DAY` | `10` / `200` | same |
 
 ---
 
@@ -458,5 +495,6 @@ win over it.
 | Key | Action |
 |---|---|
 | `1` … `9` | jump to a page |
+| `0` | AI Assistant |
 | `Space` | play / pause solution playback |
 | `←` `→` | step one move |

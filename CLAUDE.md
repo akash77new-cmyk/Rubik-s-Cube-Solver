@@ -55,6 +55,7 @@ vision engine (process 1)  backend/engine.py         single source of truth
    • issues           backend/core/validation.py    structured validation issues
    • scanning         backend/core/scanning.py      scan guide, centre-based face identity, orientation repair
    • DatasetStore     backend/services/dataset.py   confirmed scans → labelled crops
+   • AIService        backend/ai/service.py         the AI assistant: Gemini, tools, traces (Phase 4)
    • stores           backend/services/settings.py, profiles.py, analytics.py
    │                  memory copy for reads, written through to the database
    ▼  SQLAlchemy (psycopg 3)
@@ -121,6 +122,7 @@ database   Neon PostgreSQL in production · SQLite file data/cube.db locally (DA
   `Settings.autoplay_interval_ms` (default 8000), independent of `animation_speed`.
 
 ## 4. AI design rules (from Phase 4 on)
+These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a).
 1. The LLM never produces cube moves or cube state. Solvers produce moves; the validator decides validity.
 2. Code computes; the LLM chooses, plans and explains. Every number shown to users is computed in code.
 3. LLM output that drives the UI is structured JSON, validated in code before use.
@@ -131,6 +133,24 @@ database   Neon PostgreSQL in production · SQLite file data/cube.db locally (DA
 8. Privacy: never send full camera frames or personal data to external APIs (only sticker crops).
 9. LLM calls never run on the camera/frame thread.
 10. Tests never call real APIs; they use a fake LLM client.
+
+### 4a. How the AI layer works (Phase 4)
+- `AIService` (engine) runs each question in a background thread and publishes `ai:progress`,
+  `ai:answer` and `ai:status`. The session only calls `ask()`; the UI page is `AssistantPage.tsx`.
+- The agent loop (`agent.py`) uses Gemini's mode ANY: the model must call a tool every turn and
+  answers by calling `final_answer`, whose arguments are checked against the answer schema.
+  `final_answer` is refused if it comes in the same turn as other tools (read results first).
+- A new tool = a `Tool(name, description, parameters, handler)` in the feature's registry, plus
+  its name in the allowlist. Handlers return a JSON object; problems are `{"error": ...}`.
+  Schemas use only the keywords in `schema.py`. Tools never change the cube (rule 7): a tool
+  may return a *proposal*, which the UI applies only after the user confirms.
+- Every model request goes through `BudgetedLLM` (per-minute and per-day limits, refilled from
+  the trace table after a restart). Every run is traced in `ai_runs` / `ai_steps`.
+- Any `LLMError` or `AgentStopped` becomes the feature's built-in answer, with the reason shown.
+- Gemini 3 needs each model turn sent back unchanged (thought signatures): keep `Message.raw`.
+- Never log or print `GEMINI_API_KEY`; it is sent only in the `x-goog-api-key` header.
+- Tests: `ScriptedLLM` (`fake.py`) for unit tests; `tools/fake_gemini.py`, a local server as strict
+  as Gemini 3 (key header, mode ANY, thought signatures), for end-to-end tests without a key.
 
 ## 5. Deployment constraints (Render free tier)
 - **512 MB RAM, 0.1 CPU.** Phase 0 baseline is about 160 MB for all processes. Measure memory
@@ -148,6 +168,10 @@ database   Neon PostgreSQL in production · SQLite file data/cube.db locally (DA
   `production` branch's direct connection string (pooling off); it is required in production and
   set only in the Render dashboard. Neon sleeps after 5 idle minutes: the pool pings each
   connection before use, and start-up retries the first connection.
+- **AI: Gemini free tier.** `GEMINI_API_KEY` is optional and set only in the Render dashboard.
+  The app's own limits (`AI_REQUESTS_PER_MINUTE` / `AI_REQUESTS_PER_DAY`, default 10 / 200) stay
+  below Google's (see AI Studio). Google may use free-tier prompts to improve its products, so
+  send only cube data, never personal data.
 
 ## 6. Commands
 | What | Command |
@@ -159,7 +183,8 @@ database   Neon PostgreSQL in production · SQLite file data/cube.db locally (DA
 | UI hot reload | `python run.py --dev` and `cd frontend && npm run dev` |
 | Unit tests | `pytest` |
 | Pipeline check | `python tools/verify.py` |
-| Live check (app running) | `python tools/verify.py --live` (add `--expect-db postgresql` to require Postgres) |
+| Live check (app running) | `python tools/verify.py --live` (add `--expect-db postgresql` to require Postgres, `--expect-ai gemini` to require a real AI answer) |
+| AI end to end, no key | `python tools/fake_gemini.py`; app with `GEMINI_API_KEY=test-key GEMINI_BASE_URL=http://127.0.0.1:8799/v1beta`; then `python tools/verify.py --live --expect-ai gemini` |
 | DB tests on Postgres | `CUBE_TEST_POSTGRES_URL=postgresql://postgres:cube@127.0.0.1:5433/cube_test pytest` (Docker container `cube-pg`, see README) |
 | Migrations | `python -m alembic current` · `python -m alembic upgrade head --sql` (print SQL) |
 | Production mode (Linux) | `APP_ENV=production FLASK_SECRET_KEY=x python run.py --prod` |
