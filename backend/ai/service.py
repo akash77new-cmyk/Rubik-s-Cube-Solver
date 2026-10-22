@@ -10,6 +10,8 @@ The engine creates one ``AIService`` and hands it to the session. Two features u
   ``repair_async()``; the proposal comes back through a callback.
 - **The RAG coach** (Phase 7). ``ask_coach()`` answers from the lessons, with citations,
   as a ``coach:answer`` event. ``start_lessons()`` embeds the lessons in the background.
+- **The AI Tutor** (Phase 8). On the Learn page, ``tutor_async()`` writes a hint, answers a
+  "why?" question or writes the recap; the session stores it in its learn state.
 
 Every run is traced and saved, whether the answer came from the model or from the
 built-in fallback. All features share one request budget, embedding requests included.
@@ -24,7 +26,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from backend.ai import coach, repair_agent
+from backend.ai import coach, repair_agent, tutor
 from backend.ai.agent import AgentStopped, AgentTask, run_agent
 from backend.ai.assistant import ANSWER_SCHEMA, SYSTEM_PROMPT, TOOL_NAMES, SnapshotContext, build_tools, fallback_answer
 from backend.ai.budget import DAY, BudgetedEmbedder, BudgetedLLM, RequestBudget
@@ -34,6 +36,7 @@ from backend.ai.lessons import load_lessons
 from backend.ai.llm import LLMBudgetExceeded, LLMClient, LLMError
 from backend.ai.repair_agent import RepairContext
 from backend.ai.retrieval import LessonIndex
+from backend.ai.tutor import TutorContext
 from backend.ai.tracing import Trace, TraceStore
 from backend.db.database import Database, StorageError
 
@@ -59,6 +62,8 @@ REPAIR_DEADLINE_SECONDS = 60.0
 #: The coach's time limit: one embedding request and about two model requests, so the
 #: same slow-request margin as the repair agent.
 COACH_DEADLINE_SECONDS = 60.0
+#: The tutor's time limit: a hint is usually one request, a question about three.
+TUTOR_DEADLINE_SECONDS = 60.0
 
 
 @dataclass(frozen=True)
@@ -402,6 +407,92 @@ class AIService:
             how = model if source != "fallback" else f"the built-in answer ({reason})"
             self._logs.info(f"Coach answered with {how}, citing {len(payload['citations'])} section(s)", source="ai")
         return payload
+
+    # ------------------------------------------------------------------
+    # The AI Tutor (Phase 8)
+    # ------------------------------------------------------------------
+    def tutor_async(self, context: TutorContext, done: Callable[[Dict[str, Any]], None]) -> Dict[str, Any]:
+        """Like ask_coach(): returns at once; ``done`` gets the tutor's answer from a background thread."""
+        with self._lock:
+            if self._busy:
+                return {"ok": False, "error": "The AI is still answering the last question."}
+            self._busy = True
+        run_id = uuid.uuid4().hex[:12]
+        self._publish("ai:status", self.status())
+
+        def worker() -> None:
+            try:
+                payload = self.tutor_answer(context, run_id)
+            except Exception as exc:  # a bug must not leave the Learn page waiting forever
+                log.exception("The tutor failed")
+                answer = context.fallback("something went wrong")
+                payload = {"runId": run_id, "kind": context.kind, "message": answer["message"], "citations": [],
+                           "sources": [], "source": "fallback", "model": None, "reason": str(exc)}
+            finally:
+                with self._lock:
+                    self._busy = False
+                self._publish("ai:status", self.status())
+            done(payload)
+
+        threading.Thread(target=worker, name="ai-tutor", daemon=True).start()
+        return {"ok": True, "runId": run_id}
+
+    def tutor_answer(self, context: TutorContext, run_id: Optional[str] = None) -> Dict[str, Any]:
+        """One tutor request now (tutor_async's thread calls this; so do tests)."""
+        run_id = run_id or uuid.uuid4().hex[:12]
+        trace = Trace(run_id, "tutor", (context.question or context.kind)[:300])
+        source, model, reason = "fallback", None, None
+        try:
+            if self._llm is None:
+                reason = self._off_reason
+                trace.error_step("ai_off", reason)
+                answer = context.fallback(reason)
+            else:
+                task = AgentTask(
+                    tutor.SYSTEM_PROMPT,
+                    context.prompt(),
+                    tutor.build_tools(context),
+                    tutor.TOOL_NAMES,
+                    tutor.ANSWER_SCHEMA,
+                    max_steps=4,
+                    deadline_seconds=TUTOR_DEADLINE_SECONDS,
+                    answer_check=context.check_answer,
+                )
+                answer = run_agent(BudgetedLLM(self._llm, self._budget), task, trace)
+                source, model = self._llm.provider, self._llm.model
+        except (LLMError, AgentStopped) as exc:
+            reason = self._reason_text(exc)
+            trace.error_step(getattr(exc, "reason", "error"), str(exc))
+            with self._lock:
+                self._last_error = str(exc)
+            answer = context.fallback(reason)
+
+        trace.finish(source, answer, model, reason)
+        if self._store is not None:
+            try:
+                self._store.save(trace)
+            except StorageError as exc:
+                log.warning("AI trace not saved: %s", exc)
+        if self._logs is not None:
+            how = model if source != "fallback" else f"the built-in text ({reason})"
+            self._logs.info(f"Tutor {context.kind} from {how}", source="ai")
+        return {
+            "runId": run_id,
+            "kind": context.kind,
+            "question": context.question or None,
+            "message": answer["message"],
+            "citations": answer["citations"],
+            "sources": context.sources(answer["citations"]),
+            "source": source,
+            "model": model,
+            "reason": reason,
+            **trace.summary(),
+        }
+
+    @property
+    def lesson_index(self) -> Optional[LessonIndex]:
+        """The lessons' search, for the tutor's questions (None = no lessons)."""
+        return self._lessons
 
     def recent_traces(self, limit: int = 20) -> List[Dict[str, Any]]:
         """The newest traces with their steps (reads the database)."""
