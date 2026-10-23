@@ -9,6 +9,8 @@ and solves it with the Kociemba two-phase algorithm — wrapped in a real deskto
 
 `Python` · `OpenCV` · `NumPy` · `PostgreSQL` · `pgvector` · `SQLAlchemy` · `Gemini API` · `React` · `TypeScript` · `Socket programming`
 
+[![CI](https://github.com/akash77new-cmyk/Rubik-s-Cube-Solver/actions/workflows/ci.yml/badge.svg)](https://github.com/akash77new-cmyk/Rubik-s-Cube-Solver/actions/workflows/ci.yml)
+
 </div>
 
 ---
@@ -42,6 +44,7 @@ rotation arrows drawn over the live feed, and an analytics dashboard tracking ev
 | **Guided scanning** | Colour-only step guide; faces identified by their centre colour (no duplicates, any order); mirrored previews un-mirrored; orientation mistakes repaired by a smallest-change search that only applies unique fixes. |
 | **RAG coach** | Eight short lessons, split into 37 sections and embedded with Gemini; the embeddings live in PostgreSQL with pgvector, and a question finds the nearest sections by cosine distance (NumPy locally, BM25 keywords without embeddings). The coach answers only from those sections and must cite them: every citation is checked against what the search returned. |
 | **Solve & Learn** | Learn the beginner method on your own cube: scan once, then solve it in seven stages, tapping each move you make so the app always knows your cube. Code finds every step and its exact moves (tested on random cubes); an AI tutor gives hints in three levels and answers "why?" from the lessons, and any move sequence it writes must come from the app. |
+| **CI/CD and AI evaluation** | GitHub Actions runs every push: the unit tests on SQLite and on PostgreSQL with pgvector, the pipeline check, all 28 live checks against the running app (with a fake Gemini), the frontend build and the Docker build. Render deploys only after they pass. An evaluation suite measures the AI features (retrieval recall and MRR, repair accuracy, guardrails, fallbacks, and with a key the real model's citations and hints) and writes reports to `docs/eval/`. |
 | **Smart repair** | When a scan is unsolvable, a search finds every 1- or 2-sticker change that makes the cube valid (the validator decides), ranked by how unsure the camera was. A Gemini agent reads the problems, the doubtful stickers and these proven fixes, then picks one by its id or asks for a rescan, and explains why. Nothing changes until the user presses Apply; without AI the search's best fix is proposed. |
 | **Plain-English moves** | A "hold the cube like this" step comes first; then every move says which way to turn, seen from where you are ("Turn the top layer to the left."), including back-layer moves. Arrows and instructions are checked against the cube model by tests. |
 | **Training-data collection** | Every sticker keeps its reading: colour, confidence, the best three colours, and whether the detector was unsure. Confirmed scans are saved as 54 labelled 32×32 sticker crops (`ml/data/`), balanced by design and with corrected stickers marked as hard examples. |
@@ -309,7 +312,13 @@ frontend/src/
 
 ml/data/               sticker colour dataset (see ml/data/README.md)
 
+.github/workflows/
+  ci.yml               CI: tests (SQLite + Postgres), verify.py, AI evaluation, live checks, builds
+
+docs/eval/             AI evaluation reports (offline.md from every run, live.md with a real key)
+
 tools/
+  eval_ai.py           the AI evaluation suite: measures every AI feature, writes docs/eval/
   fake_gemini.py       a fake Gemini server: test the AI path without a key or internet
   generate_assets.py   generates every SVG in assets/
   rasterize.mjs        SVG → high-resolution PNG (sharp)
@@ -347,6 +356,8 @@ pytest                          # unit tests (about 40 s: scanning tests run the
 pytest -m "not slow"            # skip the solver tests
 python tools/verify.py          # end-to-end pipeline check (17 offline checks)
 python tools/verify.py --live   # + 11 checks against a running app (python run.py --headless)
+python tools/eval_ai.py         # AI evaluation, offline (about 15 s): docs/eval/offline.md
+python tools/eval_ai.py --live  # + the real Gemini model (key in .env; about 100 requests, 13 min)
 ```
 
 The unit tests live in `tests/`. They never touch your real `data/` folder or a real database:
@@ -393,6 +404,20 @@ To test the AI path end to end without a key or internet, run the fake Gemini se
 (`python tools/fake_gemini.py`), start the app with
 `GEMINI_API_KEY=test-key GEMINI_BASE_URL=http://127.0.0.1:8799/v1beta python run.py --headless`,
 then run `python tools/verify.py --live --expect-ai gemini`.
+
+**Continuous integration.** `.github/workflows/ci.yml` runs all of this on every push and pull
+request, in four parallel jobs: unit tests on SQLite and PostgreSQL + pgvector, `verify.py` and
+the offline AI evaluation (its report appears on the run's summary page); the real app started
+with the fake Gemini and checked by `verify.py --live --expect-ai gemini`; the frontend build;
+and the Docker build. It needs no secrets.
+
+**AI evaluation.** `python tools/eval_ai.py` measures the AI features without a key and fails if a
+gate fails: RAG retrieval (recall@1, recall@3, MRR on 15 labelled questions), the repair search on
+simulated misreads (including the rare ambiguous ones), the beginner method on 100 random cubes,
+12 guardrail cases (misbehaving model answers code must catch) and the built-in answers. With
+`--live` it also measures the real model: retrieval with real embeddings, the coach's citations
+and refusals, the repair agent against the built-in search, and the tutor's hints. Reports:
+`docs/eval/offline.md` and `docs/eval/live.md`.
 
 Regenerate art and screenshots:
 
@@ -500,6 +525,11 @@ wakes it in about a second, and the engine retries while it does.
 `GEMINI_API_KEY` is a secret too: add it on the same **Environment** page. Without it the
 live site still works, and the assistant gives its built-in answers.
 
+**Continuous deployment.** Render's auto-deploy is set to **After CI Checks Pass**
+(`autoDeployTrigger: checksPass`): a push to `main` is deployed only when every GitHub Actions
+job passes. `/api/health` reports the deployed commit as `version`. Commits with `[skip render]`
+in the message are not deployed at all.
+
 ### Environment variables
 
 Locally they can live in a `.env` file (copy `.env.example`); real environment variables always
@@ -512,7 +542,7 @@ win over it.
 | `CUBE_WEB_HOST` | `127.0.0.1` | `0.0.0.0` |
 | `CUBE_WEB_PORT` | `$PORT`, else `8000` | Render sets `PORT` |
 | `CUBE_ENGINE_HOST` / `CUBE_ENGINE_PORT` | `127.0.0.1` / `9999` | same |
-| `CUBE_ALLOWED_ORIGINS` | `*` | `*` (tightened in Phase 12) |
+| `CUBE_ALLOWED_ORIGINS` | `*` | not set: the app's own origin only (comma-separated list, or `*`) |
 | `DATABASE_URL` | not set: SQLite file `data/cube.db` | required: Neon connection string |
 | `CUBE_DATA_DIR` | `./data` | `./data` |
 | `CUBE_DATASET_ENABLED` | on | off |

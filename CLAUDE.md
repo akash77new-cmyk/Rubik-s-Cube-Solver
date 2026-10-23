@@ -194,6 +194,17 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
   the UI's stage bar follows `working_stage` (the first stage not finished; Undo un-finishes).
   Shown moves stop as soon as their stage is done (the corner trick's last D isn't needed).
 
+### 4e. Evaluation and CI (Phase 12)
+- `tools/eval_ai.py` is the AI evaluation suite. Offline (no key) it measures retrieval, the repair
+  search, the beginner method, guardrails and fallbacks, and exits 1 if a gate fails; CI runs it.
+  `--live` measures the real model (by hand: about 100 requests, paced). Reports go to `docs/eval/`
+  and contain only measured numbers: never edit them by hand, rerun the tool.
+- A new AI feature gets: guardrail cases in `_guard_cases()`, a fallback check, and (if it uses
+  the model) a live evaluation.
+- `.github/workflows/ci.yml` runs on every push: pytest (SQLite + Postgres/pgvector), verify.py,
+  the offline evaluation, verify.py --live against the app with the fake Gemini, the frontend
+  build and the Docker build. No job may need a secret.
+
 ## 5. Deployment constraints (Render free tier)
 - **512 MB RAM, 0.1 CPU.** Phase 0 baseline is about 160 MB for all processes. Measure memory
   when adding heavy dependencies. Phase 3 (SQLAlchemy, Alembic, psycopg) adds about 50 MB to
@@ -204,6 +215,11 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 - Production solver: `kociemba` (C) from `requirements-prod.txt`. The pure-Python fallback needs
   large tables; don't rely on it in production.
 - **Until Phase 9 the live site has one shared session for every visitor** (Solve & Learn too).
+- **Deploys:** Render deploys a push to `main` only after every CI job passes
+  (`autoDeployTrigger: checksPass`). `/api/health` shows the live commit as `version`.
+- **Security:** in production Socket.IO accepts only the app's own origin (unless
+  `CUBE_ALLOWED_ORIGINS` says otherwise), and every response carries `X-Content-Type-Options`,
+  `X-Frame-Options` and `Referrer-Policy` headers.
 - Keep per-frame server work light (0.1 CPU).
 - Dataset collection is off in production (`CUBE_DATASET_ENABLED`); `ml/data/` is committed to git.
 - **Database: Neon free tier** (Singapore, same region as Render). `DATABASE_URL` = the
@@ -227,6 +243,7 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 | Pipeline check | `python tools/verify.py` |
 | Live check (app running) | `python tools/verify.py --live` (add `--expect-db postgresql` to require Postgres, `--expect-ai gemini` to require a real AI answer) |
 | AI end to end, no key | `python tools/fake_gemini.py`; app with `GEMINI_API_KEY=test-key GEMINI_BASE_URL=http://127.0.0.1:8799/v1beta`; then `python tools/verify.py --live --expect-ai gemini` |
+| AI evaluation | `python tools/eval_ai.py` (offline, with gates) · `python tools/eval_ai.py --live` (real Gemini, by hand) |
 | DB tests on Postgres | `CUBE_TEST_POSTGRES_URL=postgresql://postgres:cube@127.0.0.1:5433/cube_test pytest` (Docker container `cube-pg`, see README) |
 | Migrations | `python -m alembic current` · `python -m alembic upgrade head --sql` (print SQL) |
 | Production mode (Linux) | `APP_ENV=production FLASK_SECRET_KEY=x python run.py --prod` |
@@ -238,6 +255,8 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 - `backend/core/cube.py` face-cycle tables (`_EDGE_CYCLES`): known correct, verified by tests.
 - `backend/ipc/protocol.py` framing: the engine and the server both depend on it.
 - `tools/verify.py`: the end-to-end smoke test; extend it, don't weaken it.
+- `.github/workflows/ci.yml`: Render's deploys wait for it; a removed job removes a safety net.
+- `tools/eval_ai.py` gates: raise them when results improve, never lower them to make CI pass.
 - `backend/db/migrations/versions/*`: a migration that has run on Neon is history; add a new one.
 
 ## 8. Roadmap
@@ -256,5 +275,5 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 | 9 | Accounts + multi-user sessions | ⬜ |
 | 10 | Browser camera | ⬜ |
 | 11 | Trained colour classifier + vision-LLM fallback | ⬜ |
-| 12 | Launch: tests, CI, eval report, security pass, docs | ⬜ |
+| 12 | Launch: CI/CD, AI evaluation suite, security pass, docs | ✅ |
 | 13 | Stretch: Practice mode + Learning Path agent | ⬜ |
