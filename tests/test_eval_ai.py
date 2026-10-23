@@ -1,5 +1,8 @@
 """The AI evaluation suite (tools/eval_ai.py): its offline evaluations pass their gates."""
 
+from backend.ai.agent import FINAL_ANSWER
+from backend.ai.fake import ScriptedLLM, tool_call
+from backend.ai.llm import LLMRequest
 from tools import eval_ai
 
 
@@ -36,3 +39,14 @@ def test_the_offline_report_renders(tmp_path):
     results["allGates"] = True
     text = eval_ai.offline_markdown(results, {"date": "today", "commit": "abc1234"})
     assert text.startswith("# AI evaluation: offline") and "| Keywords (BM25) |" in text
+
+
+def test_the_live_pacing_counts_answers_and_its_own_waits(monkeypatch):
+    slept = []
+    monkeypatch.setattr(eval_ai.time, "sleep", slept.append)
+    model = ScriptedLLM([tool_call("search_lessons", query="cross"), tool_call(FINAL_ANSWER, message="Hi", citations=[])])
+    paced = eval_ai.Paced(model, per_minute=60)
+    for _ in range(2):
+        paced.generate(LLMRequest(system="s", messages=[]))
+    assert paced.final_answers == 1  # a lesson search, then one answer: accepted first try
+    assert len(slept) == 1 and paced.waited == sum(slept) > 0.9  # the 2nd request waited about 1 s

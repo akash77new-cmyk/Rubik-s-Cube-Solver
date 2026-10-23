@@ -366,7 +366,11 @@ def eval_fallbacks() -> Dict[str, Any]:
 
 class Paced:
     """Wraps a Gemini client: at most ``per_minute`` requests a minute, so the run never
-    hits the free tier's limits. Waiting is fine here: nobody is waiting for an answer."""
+    hits the free tier's limits. Waiting is fine here: nobody is waiting for an answer.
+
+    It also keeps two counts, so the report measures the model and not the pacing:
+    ``waited`` (seconds spent pacing, left out of the timings) and ``final_answers`` (how
+    many answers the model gave: one means its first answer passed code's checks)."""
 
     def __init__(self, inner: Any, per_minute: float) -> None:
         self._inner = inner
@@ -374,16 +378,21 @@ class Paced:
         self._last = 0.0
         self.provider = getattr(inner, "provider", "gemini")
         self.model = inner.model
+        self.waited = 0.0
+        self.final_answers = 0
 
     def _wait(self) -> None:
         delay = self._last + self._gap - time.monotonic()
         if delay > 0:
             time.sleep(delay)
+            self.waited += delay
         self._last = time.monotonic()
 
     def generate(self, request: Any) -> Any:
         self._wait()
-        return self._inner.generate(request)
+        response = self._inner.generate(request)
+        self.final_answers += sum(1 for call in response.tool_calls if call.name == FINAL_ANSWER)
+        return response
 
     def embed(self, texts: List[str], task: str) -> List[List[float]]:
         self._wait()
@@ -406,16 +415,24 @@ def live_evals(per_minute: float) -> Dict[str, Any]:
     ai = AIService(llm, RequestBudget(1000, 1000), None, lambda e, d: None, lessons=lessons)
     out: Dict[str, Any] = {"model": llm.model, "embedModel": embedder.model}
 
+    def measured(ask: Callable[[], Dict[str, Any]]) -> Tuple[Dict[str, Any], int, float]:
+        """Run one request: (its payload, how many answers the model gave, ms without pacing).
+        A lesson search before the answer is a normal step, not a second try."""
+        waited, answers = llm.waited + embedder.waited, llm.final_answers
+        payload = ask()
+        paced_ms = (llm.waited + embedder.waited - waited) * 1000
+        return payload, llm.final_answers - answers, max(0.0, payload["durationMs"] - paced_ms)
+
     print("  retrieval with real embeddings ...", flush=True)
     out["retrieval"] = ranking(lambda q: [hit.chunk.id for hit in lessons.search(q, 10).hits])
 
     print("  coach: 15 questions + 3 it must refuse ...", flush=True)
     rows = []
     for question, expected in EVAL_QUESTIONS:
-        payload = ai.coach_answer(question)
+        payload, answers, ms = measured(lambda: ai.coach_answer(question))
         rows.append({"question": question, "gemini": payload["source"] != "fallback", "citesExpected":
                      expected in payload["citations"], "covered": payload["covered"], "requests": payload["requests"],
-                     "ms": payload["durationMs"]})
+                     "firstTry": answers == 1, "ms": round(ms)})
     refusals = []
     for question in OUT_OF_SCOPE:
         payload = ai.coach_answer(question)
@@ -425,7 +442,7 @@ def live_evals(per_minute: float) -> Dict[str, Any]:
     out["coach"] = {
         "questions": len(rows), "answeredByGemini": len(answered),
         "citesExpected": sum(r["citesExpected"] for r in answered),
-        "firstTry": sum(1 for r in answered if r["requests"] <= 2),
+        "firstTry": sum(r["firstTry"] for r in answered),
         "outOfScope": len(refusals), "refusedCorrectly": sum(r["saidNotCovered"] for r in refusals if r["gemini"]),
         "p50ms": percentile([r["ms"] for r in answered], 0.5), "p95ms": percentile([r["ms"] for r in answered], 0.95),
         "rows": rows, "refusals": refusals,
@@ -463,10 +480,11 @@ def live_evals(per_minute: float) -> Dict[str, Any]:
             learn.hint()  # every third one asks for hint 2
         level = learn.hint_level
         context = TutorContext("hint", learn.facts("hint"), learn.allowed_sequences("hint"), lessons)
-        payload = ai.tutor_answer(context)
+        payload, answers, ms = measured(lambda: ai.tutor_answer(context))
         hints.append({"stage": learn.stage, "level": level, "gemini": payload["source"] != "fallback",
-                      "firstTry": payload["requests"] <= 1, "movesInText": len(move_runs(payload["message"])),
-                      "words": len(payload["message"].split()), "ms": payload["durationMs"]})
+                      "requests": payload["requests"], "firstTry": answers == 1,
+                      "movesInText": len(move_runs(payload["message"])),
+                      "words": len(payload["message"].split()), "ms": round(ms)})
     answered_hints = [h for h in hints if h["gemini"]]
     out["tutor"] = {
         "hints": len(hints), "answeredByGemini": len(answered_hints),
@@ -591,6 +609,7 @@ def live_markdown(r: Dict[str, Any], meta: Dict[str, str]) -> str:
         f"{coach['refusedCorrectly']}/{coach['outOfScope']} | {coach['p50ms'] / 1000:.1f} s / {coach['p95ms'] / 1000:.1f} s |",
         "",
         "Every accepted citation is one the search returned in that run: code rejects any other.",
+        "Times are the model's own: the run's pacing waits (to stay under the free limits) are left out.",
         "",
         "## Repair agent vs the built-in search",
         "",
@@ -618,8 +637,8 @@ def live_markdown(r: Dict[str, Any], meta: Dict[str, str]) -> str:
         f"| {tut['hints']} | {tut['answeredByGemini']} | {tut['firstTry']} | {tut['hint1WithMoves']} | "
         f"{tut['medianWords']} | {tut['p50ms'] / 1000:.1f} s / {tut['p95ms'] / 1000:.1f} s |",
         "",
-        "\"Accepted first try\" = code's checks passed on the first answer; otherwise the model fixed it after the "
-        "rejection. Hint 1 can never show moves: code rejects them.",
+        "\"Accepted first try\" = code's checks passed on the model's first answer (a lesson search before it is a "
+        "normal step); otherwise the model fixed it after the rejection. Hint 1 can never show moves: code rejects them.",
     ]
     return "\n".join(lines) + "\n"
 

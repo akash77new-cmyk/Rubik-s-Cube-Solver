@@ -1,0 +1,429 @@
+{
+ "date": "2026-10-24 01:28",
+ "commit": "7377f89",
+ "model": "gemini-3.5-flash-lite",
+ "embedModel": "gemini-embedding-001",
+ "retrieval": {
+  "questions": 15,
+  "recall@1": 15,
+  "recall@3": 15,
+  "mrr": 1.0,
+  "misses@3": []
+ },
+ "coach": {
+  "questions": 15,
+  "answeredByGemini": 15,
+  "citesExpected": 15,
+  "firstTry": 15,
+  "outOfScope": 3,
+  "refusedCorrectly": 3,
+  "p50ms": 3065,
+  "p95ms": 3442,
+  "rows": [
+   {
+    "question": "What does R prime mean?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 2760
+   },
+   {
+    "question": "Which way do I turn B?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 3034
+   },
+   {
+    "question": "How do I undo a sequence of moves?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 2809
+   },
+   {
+    "question": "Why does the centre decide the colour of a side?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 3175
+   },
+   {
+    "question": "Which colour is opposite white?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 3089
+   },
+   {
+    "question": "What is God's number?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 2805
+   },
+   {
+    "question": "Red and orange look the same to the camera, what can I do?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 3442
+   },
+   {
+    "question": "Can I scan the sides in any order?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 3109
+   },
+   {
+    "question": "Why is my cube not solvable when it has 10 yellow stickers?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 3426
+   },
+   {
+    "question": "What is corner twist and parity?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 3121
+   },
+   {
+    "question": "How do I make the yellow cross?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 3177
+   },
+   {
+    "question": "How do I insert a middle layer edge?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 3065
+   },
+   {
+    "question": "How does the Kociemba solver find a solution?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 2845
+   },
+   {
+    "question": "How should I hold the cube while following the solution?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 3001
+   },
+   {
+    "question": "What should I learn after the beginner method?",
+    "gemini": true,
+    "citesExpected": true,
+    "covered": true,
+    "requests": 2,
+    "firstTry": true,
+    "ms": 2775
+   }
+  ],
+  "refusals": [
+   {
+    "question": "Who invented the Rubik's Cube?",
+    "gemini": true,
+    "saidNotCovered": true,
+    "requests": 3
+   },
+   {
+    "question": "What is the world record for solving a cube?",
+    "gemini": true,
+    "saidNotCovered": true,
+    "requests": 3
+   },
+   {
+    "question": "Which shop sells the best speed cube?",
+    "gemini": true,
+    "saidNotCovered": true,
+    "requests": 3
+   }
+  ]
+ },
+ "repair": {
+  "modes": {
+   "doubt": {
+    "cases": 3,
+    "agentRight": 3,
+    "agentRescans": 0,
+    "agentWrongFix": 0,
+    "builtInRight": 3
+   },
+   "hint": {
+    "cases": 3,
+    "agentRight": 3,
+    "agentRescans": 0,
+    "agentWrongFix": 0,
+    "builtInRight": 3
+   },
+   "no-hint": {
+    "cases": 3,
+    "agentRight": 1,
+    "agentRescans": 1,
+    "agentWrongFix": 1,
+    "builtInRight": 1
+   }
+  },
+  "answeredByGemini": 9,
+  "cases": [
+   {
+    "mode": "doubt",
+    "gemini": true,
+    "action": "apply_fix",
+    "agentRight": true,
+    "agentWrongFix": false,
+    "builtInRight": true,
+    "uniqueFix": true,
+    "requests": 2
+   },
+   {
+    "mode": "doubt",
+    "gemini": true,
+    "action": "apply_fix",
+    "agentRight": true,
+    "agentWrongFix": false,
+    "builtInRight": true,
+    "uniqueFix": false,
+    "requests": 3
+   },
+   {
+    "mode": "doubt",
+    "gemini": true,
+    "action": "apply_fix",
+    "agentRight": true,
+    "agentWrongFix": false,
+    "builtInRight": true,
+    "uniqueFix": false,
+    "requests": 2
+   },
+   {
+    "mode": "hint",
+    "gemini": true,
+    "action": "apply_fix",
+    "agentRight": true,
+    "agentWrongFix": false,
+    "builtInRight": true,
+    "uniqueFix": true,
+    "requests": 2
+   },
+   {
+    "mode": "hint",
+    "gemini": true,
+    "action": "apply_fix",
+    "agentRight": true,
+    "agentWrongFix": false,
+    "builtInRight": true,
+    "uniqueFix": false,
+    "requests": 2
+   },
+   {
+    "mode": "hint",
+    "gemini": true,
+    "action": "apply_fix",
+    "agentRight": true,
+    "agentWrongFix": false,
+    "builtInRight": true,
+    "uniqueFix": false,
+    "requests": 3
+   },
+   {
+    "mode": "no-hint",
+    "gemini": true,
+    "action": "apply_fix",
+    "agentRight": true,
+    "agentWrongFix": false,
+    "builtInRight": true,
+    "uniqueFix": true,
+    "requests": 2
+   },
+   {
+    "mode": "no-hint",
+    "gemini": true,
+    "action": "apply_fix",
+    "agentRight": false,
+    "agentWrongFix": true,
+    "builtInRight": false,
+    "uniqueFix": false,
+    "requests": 2
+   },
+   {
+    "mode": "no-hint",
+    "gemini": true,
+    "action": "rescan_side",
+    "agentRight": false,
+    "agentWrongFix": false,
+    "builtInRight": false,
+    "uniqueFix": false,
+    "requests": 2
+   }
+  ]
+ },
+ "tutor": {
+  "hints": 12,
+  "answeredByGemini": 12,
+  "firstTry": 12,
+  "hint1WithMoves": 0,
+  "medianWords": 34,
+  "p50ms": 3363,
+  "p95ms": 5500,
+  "rows": [
+   {
+    "stage": 1,
+    "level": 1,
+    "gemini": true,
+    "requests": 2,
+    "firstTry": true,
+    "movesInText": 0,
+    "words": 40,
+    "ms": 3594
+   },
+   {
+    "stage": 2,
+    "level": 1,
+    "gemini": true,
+    "requests": 2,
+    "firstTry": true,
+    "movesInText": 0,
+    "words": 32,
+    "ms": 3363
+   },
+   {
+    "stage": 5,
+    "level": 2,
+    "gemini": true,
+    "requests": 2,
+    "firstTry": true,
+    "movesInText": 1,
+    "words": 41,
+    "ms": 3240
+   },
+   {
+    "stage": 2,
+    "level": 1,
+    "gemini": true,
+    "requests": 2,
+    "firstTry": true,
+    "movesInText": 0,
+    "words": 29,
+    "ms": 3551
+   },
+   {
+    "stage": 3,
+    "level": 1,
+    "gemini": true,
+    "requests": 2,
+    "firstTry": true,
+    "movesInText": 0,
+    "words": 40,
+    "ms": 3155
+   },
+   {
+    "stage": 6,
+    "level": 2,
+    "gemini": true,
+    "requests": 2,
+    "firstTry": true,
+    "movesInText": 1,
+    "words": 36,
+    "ms": 2837
+   },
+   {
+    "stage": 1,
+    "level": 1,
+    "gemini": true,
+    "requests": 2,
+    "firstTry": true,
+    "movesInText": 0,
+    "words": 33,
+    "ms": 3406
+   },
+   {
+    "stage": 3,
+    "level": 1,
+    "gemini": true,
+    "requests": 2,
+    "firstTry": true,
+    "movesInText": 0,
+    "words": 22,
+    "ms": 2537
+   },
+   {
+    "stage": 5,
+    "level": 2,
+    "gemini": true,
+    "requests": 2,
+    "firstTry": true,
+    "movesInText": 1,
+    "words": 44,
+    "ms": 3313
+   },
+   {
+    "stage": 2,
+    "level": 1,
+    "gemini": true,
+    "requests": 2,
+    "firstTry": true,
+    "movesInText": 0,
+    "words": 33,
+    "ms": 5500
+   },
+   {
+    "stage": 3,
+    "level": 1,
+    "gemini": true,
+    "requests": 2,
+    "firstTry": true,
+    "movesInText": 0,
+    "words": 23,
+    "ms": 2974
+   },
+   {
+    "stage": 7,
+    "level": 2,
+    "gemini": true,
+    "requests": 2,
+    "firstTry": true,
+    "movesInText": 1,
+    "words": 37,
+    "ms": 3373
+   }
+  ]
+ }
+}
