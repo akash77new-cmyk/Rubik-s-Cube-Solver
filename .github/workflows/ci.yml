@@ -1,0 +1,137 @@
+# Continuous integration (Phase 12): every push and pull request runs four jobs at once.
+# Render deploys a push to main only after all of them pass (render.yaml:
+# autoDeployTrigger: checksPass), so a failing test never reaches the live site.
+#
+#   tests       unit tests on SQLite and PostgreSQL with pgvector, verify.py, the AI evaluation
+#   end-to-end  the real app running, with the fake Gemini: verify.py --live (all 28 checks)
+#   frontend    TypeScript check + production build of the React UI
+#   docker      the production image builds (the same Dockerfile Render uses)
+#
+# No secrets: the AI paths are tested with tools/fake_gemini.py, never the real API.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch cancels the older run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests, verify and AI evaluation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: cube
+          POSTGRES_DB: cube_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: System libraries for OpenCV
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgl1 libglib2.0-0
+      - name: Install the app (with the C solver) and the dev tools
+        run: python -m pip install -r requirements-prod.txt -r requirements-dev.txt
+      - name: Unit tests on SQLite and PostgreSQL + pgvector
+        env:
+          CUBE_TEST_POSTGRES_URL: postgresql://postgres:cube@127.0.0.1:5433/cube_test
+        run: python -m pytest -q
+      - name: Pipeline check
+        run: python tools/verify.py
+      - name: AI evaluation (offline, with gates)
+        run: python tools/eval_ai.py --out eval-report
+      - name: Show the evaluation report on the run's summary page
+        if: always()
+        run: cat eval-report/offline.md >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Keep the evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-eval-offline
+          path: eval-report/
+          if-no-files-found: ignore
+
+  end-to-end:
+    name: End to end (running app, fake Gemini)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: System libraries for OpenCV
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgl1 libglib2.0-0
+      - name: Install the app (with the C solver) and the dev tools
+        run: python -m pip install -r requirements-prod.txt -r requirements-dev.txt
+      - name: Start the fake Gemini and the app
+        env:
+          GEMINI_API_KEY: test-key
+          GEMINI_BASE_URL: http://127.0.0.1:8799/v1beta
+          CUBE_DATA_DIR: ${{ runner.temp }}/cube-data
+        run: |
+          python tools/fake_gemini.py > fake-gemini.log 2>&1 &
+          python run.py --headless > app.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -fs http://127.0.0.1:8000/api/health | grep -q '"connected": *true'; then
+              echo "The app is up after ${i} s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "The app did not start"; cat app.log; exit 1
+      - name: Live checks against the running app
+        run: python tools/verify.py --live --expect-ai gemini
+      - name: App log (when something failed)
+        if: failure()
+        run: cat app.log fake-gemini.log
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: TypeScript check and production build
+        run: npm run build
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the production image
+        run: docker build -t cube-solver .

@@ -8,7 +8,9 @@ services:
     region: singapore
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
-    autoDeployTrigger: commit
+    # Continuous deployment: deploy a push to main only after its GitHub Actions checks
+    # pass (.github/workflows/ci.yml). A failing test never reaches the live site.
+    autoDeployTrigger: checksPass
     envVars:
       - key: APP_ENV
         value: production
