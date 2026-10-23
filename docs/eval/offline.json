@@ -1,0 +1,137 @@
+{
+ "date": "2026-10-23 12:23",
+ "commit": "50e47c4",
+ "retrieval": {
+  "sections": 37,
+  "keywords": {
+   "questions": 15,
+   "recall@1": 13,
+   "recall@3": 14,
+   "mrr": 0.91,
+   "misses@3": [
+    "How does the Kociemba solver find a solution?"
+   ]
+  },
+  "testVectors": {
+   "questions": 15,
+   "recall@1": 14,
+   "recall@3": 14,
+   "mrr": 0.933,
+   "misses@3": [
+    "How does the Kociemba solver find a solution?"
+   ]
+  },
+  "gate": true
+ },
+ "repair": {
+  "kinds": {
+   "one sticker": {
+    "cases": 10,
+    "trueFixFound": 10,
+    "uniqueFix": 10,
+    "builtInRight": {
+     "doubt": 10,
+     "hint": 10,
+     "no-hint": 10
+    }
+   },
+   "two stickers": {
+    "cases": 10,
+    "trueFixFound": 10,
+    "uniqueFix": 10,
+    "builtInRight": {
+     "doubt": 10,
+     "hint": 10,
+     "no-hint": 10
+    }
+   },
+   "two, ambiguous": {
+    "cases": 10,
+    "trueFixFound": 10,
+    "uniqueFix": 0,
+    "builtInRight": {
+     "doubt": 10,
+     "hint": 10,
+     "no-hint": 3
+    }
+   }
+  },
+  "gate": true
+ },
+ "beginner": {
+  "cubes": 100,
+  "solved": 100,
+  "stagesInOrder": 100,
+  "movesMin": 90,
+  "movesMedian": 134,
+  "movesMax": 185,
+  "maxAlgorithmsPerYellowStage": 3,
+  "slowestStepMs": 20.9,
+  "gate": true
+ },
+ "guardrails": {
+  "cases": [
+   {
+    "case": "repair: a fix id the search never returned",
+    "passed": true
+   },
+   {
+    "case": "repair: a rescan without a side",
+    "passed": true
+   },
+   {
+    "case": "repair: a real fix id is accepted",
+    "passed": true
+   },
+   {
+    "case": "coach: a citation the search didn't return",
+    "passed": true
+   },
+   {
+    "case": "coach: a covered answer with no citation",
+    "passed": true
+   },
+   {
+    "case": "tutor: moves in hint 1",
+    "passed": true
+   },
+   {
+    "case": "tutor: a made-up move sequence",
+    "passed": true
+   },
+   {
+    "case": "tutor: a lesson algorithm is accepted",
+    "passed": true
+   },
+   {
+    "case": "agent: an unknown tool gets an error, then the answer counts",
+    "passed": true
+   },
+   {
+    "case": "agent: final_answer next to another tool is refused",
+    "passed": true
+   },
+   {
+    "case": "agent: an answer that breaks the schema is sent back",
+    "passed": true
+   },
+   {
+    "case": "agent: a model that never answers is stopped",
+    "passed": true
+   }
+  ],
+  "passed": 12,
+  "total": 12,
+  "gate": true
+ },
+ "fallbacks": {
+  "features": {
+   "assistant": true,
+   "repair agent": true,
+   "coach": true,
+   "tutor": true
+  },
+  "gate": true
+ },
+ "allGates": true
+}
