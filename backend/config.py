@@ -66,7 +66,7 @@ class RuntimeConfig:
     engine_host: str
     engine_port: int
     secret_key: str = field(repr=False)       # hidden from repr(), so it never ends up in a log
-    allowed_origins: Union[str, List[str]]    # "*" or a list of origins
+    allowed_origins: Union[None, str, List[str]]  # None = same origin only, "*", or a list
     dataset_enabled: bool                     # may scans be saved as training data?
     database_url: str = field(repr=False)     # SQLAlchemy URL; may contain a password
     # AI (Phase 4). Without a key, every AI feature gives its built-in answer.
@@ -128,11 +128,17 @@ def read_runtime_config(env: Mapping[str, str]) -> RuntimeConfig:
             raise ConfigError("FLASK_SECRET_KEY must be set when APP_ENV=production")
         secret = "dev-only-insecure-key"
 
-    raw_origins = (env.get("CUBE_ALLOWED_ORIGINS") or "*").strip()
-    origins: Union[str, List[str]] = (
-        "*" if raw_origins == "*"
-        else [o.strip() for o in raw_origins.split(",") if o.strip()]
-    )
+    # Which web pages may open a Socket.IO connection. In production, by default only
+    # the app's own page (same origin): another site can't drive the live demo from a
+    # visitor's browser. Locally any origin, so the Vite dev server keeps working.
+    raw_origins = (env.get("CUBE_ALLOWED_ORIGINS") or "").strip()
+    origins: Union[None, str, List[str]]
+    if not raw_origins:
+        origins = None if production else "*"
+    elif raw_origins == "*":
+        origins = "*"
+    else:
+        origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
 
     # Dataset collection needs a local camera and a permanent disk, so it is on by
     # default in development and off in production (Render's disk is temporary).

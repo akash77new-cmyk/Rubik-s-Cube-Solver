@@ -64,6 +64,9 @@ REPAIR_DEADLINE_SECONDS = 60.0
 COACH_DEADLINE_SECONDS = 60.0
 #: The tutor's time limit: a hint is usually one request, a question about three.
 TUTOR_DEADLINE_SECONDS = 60.0
+#: The assistant's time limit, the same margin as the others (it was the loop's default,
+#: 45 s, and a live answer once took 40 s).
+ASSISTANT_DEADLINE_SECONDS = 60.0
 
 
 @dataclass(frozen=True)
@@ -192,7 +195,8 @@ class AIService:
                 trace.error_step("ai_off", reason)
                 answer = fallback_answer(context, reason)
             else:
-                task = AgentTask(SYSTEM_PROMPT, question, build_tools(context), TOOL_NAMES, ANSWER_SCHEMA)
+                task = AgentTask(SYSTEM_PROMPT, question, build_tools(context), TOOL_NAMES, ANSWER_SCHEMA,
+                                 deadline_seconds=ASSISTANT_DEADLINE_SECONDS)
                 answer = run_agent(
                     BudgetedLLM(self._llm, self._budget),
                     task,

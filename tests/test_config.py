@@ -73,6 +73,12 @@ def test_comma_separated_origins_become_a_list():
     assert config.allowed_origins == ["https://a.example", "https://b.example"]
 
 
+def test_production_allows_only_its_own_origin_by_default():
+    production = {**PRODUCTION, "FLASK_SECRET_KEY": "s3cret"}
+    assert read_runtime_config(production).allowed_origins is None  # same origin only
+    assert read_runtime_config({**production, "CUBE_ALLOWED_ORIGINS": "*"}).allowed_origins == "*"
+
+
 def test_invalid_app_env_raises():
     with pytest.raises(ConfigError, match="APP_ENV"):
         read_runtime_config({"APP_ENV": "staging"})

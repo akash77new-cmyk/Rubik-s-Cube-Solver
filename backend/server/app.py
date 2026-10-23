@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import mimetypes
+import os
 from typing import Any, Dict, Iterator
 
 from flask import Flask, Response, jsonify, request, send_from_directory
@@ -42,6 +43,18 @@ mimetypes.add_type("image/svg+xml", ".svg")
 
 #: Boundary used by the MJPEG multipart response.
 _BOUNDARY = "cubeframe"
+
+#: The deployed commit: Render sets RENDER_GIT_COMMIT. After a deploy, /api/health shows
+#: which version is live ("local" when running on a laptop).
+VERSION = (os.environ.get("RENDER_GIT_COMMIT") or "local")[:7]
+
+#: Security headers on every response (Phase 12): no MIME sniffing, no framing of the
+#: app inside another site (clickjacking), and no full URLs leaked to other sites.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+}
 
 _PLACEHOLDER_PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><title>Rubik's Cube Solver</title>
@@ -76,6 +89,12 @@ def create_app(
         engineio_logger=False,
     )
     engine = EngineClient(host=engine_host, port=engine_port, want_frames=True)
+
+    @app.after_request
+    def _security_headers(response: Response) -> Response:
+        for name, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(name, value)
+        return response
 
     # ------------------------------------------------------------------
     # Engine -> browser relay
@@ -121,6 +140,7 @@ def create_app(
         return jsonify(
             {
                 "status": "ok",
+                "version": VERSION,
                 "engine": engine.status(),
                 "frontendBuilt": (FRONTEND_DIST / "index.html").exists(),
             }

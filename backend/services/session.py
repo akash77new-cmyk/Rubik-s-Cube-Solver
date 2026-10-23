@@ -1465,8 +1465,11 @@ class SolveSession:
 
     def _dispatch(self, command: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if command == "sync":
+            # A browser just connected: send it the full state, the analytics and the
+            # recent log lines, so the Logs page also shows what happened before it opened.
             self._broadcast_state()
             self._publish_event("analytics", self._analytics.summary())
+            self._publish_event("logs", self._logs.history())
             return {"ok": True}
         if command == "camera.start":
             return self.start_camera()
