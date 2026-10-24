@@ -664,6 +664,19 @@ def run_live(url: str, expect_db: str | None = None, expect_ai: str | None = Non
         command("learn.start", settle=0.3)
         command("learn.ready", settle=0.3)
         assert wait_for(lambda: (state.get("learn") or {}).get("ready")), "Solve & Learn did not start"
+
+        # A hint takes up to 3 AI requests (the lesson search's embedding and two model
+        # turns), and the AI checks above have just used the same per-minute budget. Wait
+        # until it has room, or the app rightly gives its built-in hint and the tutor's
+        # Gemini path goes untested. The budget numbers come from the app's own snapshot.
+        def budget_has_room() -> bool:
+            command("sync", settle=2.0)  # a fresh snapshot: the count covers the last 60 s
+            budget = (state.get("ai") or {}).get("budget") or {}
+            return budget.get("usedLastMinute", 0) + 3 <= budget.get("perMinute", 3)
+
+        started = time.time()
+        assert wait_for(budget_has_room, timeout=70), "the AI budget had no room for a hint within 70 s"
+        waited = round(time.time() - started)
         command("learn.hint", settle=0.2)
 
         def hint_ready() -> bool:
@@ -682,7 +695,9 @@ def run_live(url: str, expect_db: str | None = None, expect_ai: str | None = Non
         stage = state["learn"]["stage"]
         command("learn.exit", settle=0.3)  # the live site has one shared session: leave it clean
         how = hint["model"] if hint["source"] != "fallback" else "built-in hint"
-        return f"{how}: \"{hint['text'][:50]}...\"; followed {len(moves)} shown move(s), now at stage {stage}"
+        pause = f" (waited {waited} s for the AI budget)" if waited > 2 else ""
+        return (f"{how}{pause}: \"{hint['text'][:50]}...\"; followed {len(moves)} shown move(s), "
+                f"now at stage {stage}")
 
     @check("live · engine streams structured logs")
     def _() -> str:
