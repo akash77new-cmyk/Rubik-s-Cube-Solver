@@ -22,7 +22,7 @@ from typing import Any, Dict
 
 from backend.ai.service import AIConfig, AIService
 from backend.ai.tracing import TraceStore
-from backend.config import DATA_DIR, DATASET_DIR, ENGINE_HOST, ENGINE_PORT, RUNTIME
+from backend.config import DATA_DIR, DATASET_DIR, ENGINE_HOST, ENGINE_PORT, MODEL_DIR, RUNTIME
 from backend.core.solver import solver_engine
 from backend.db import Database, StorageError, connect
 from backend.ipc.server import ClientConnection, EngineServer
@@ -33,6 +33,7 @@ from backend.services.logbus import log_bus
 from backend.services.profiles import ProfileStore
 from backend.services.session import SolveSession
 from backend.services.settings import SettingsStore
+from backend.vision.classifier import load_color_model
 
 log = logging.getLogger("engine")
 
@@ -71,6 +72,8 @@ class VisionEngine:
             logs=log_bus,
             database=database,  # the lessons' embeddings live there (Phase 7)
         )
+        # The scanner's colour model (Phase 11): the trained CNN, or the HSV detector.
+        classifier, self.color_model = load_color_model(RUNTIME.color_model, MODEL_DIR)
         self.session = SolveSession(
             settings=self.settings,
             profiles=self.profiles,
@@ -82,6 +85,8 @@ class VisionEngine:
             dataset=self.dataset,
             database=database,
             ai=self.ai,
+            classifier=classifier,
+            color_model=self.color_model,
         )
         # Stream every log entry to subscribers as it happens.
         log_bus.add_listener(lambda entry: self.server.broadcast("log", entry.to_dict()))
@@ -140,6 +145,15 @@ class VisionEngine:
         self.ai.start_lessons()  # embeds new or changed lessons in the background
         if self.dataset is not None:
             log_bus.info(f"Dataset collection is on: {DATASET_DIR}", source="dataset")
+        model = self.color_model
+        if model["active"] == "cnn":
+            accuracy = model["model"]["cnnAccuracy"]
+            tested = f"{accuracy:.1%} on held-out scans" if accuracy is not None else "untested"
+            colour_summary = f"Colour model: the trained CNN ({tested})"
+        else:
+            colour_summary = f"Colour model: HSV ({model['reason']})"
+        log.info(colour_summary)
+        log_bus.info(colour_summary, source="scan")
         # Building the two-phase pruning tables can take a while on first run;
         # do it off the command path so the UI stays responsive meanwhile.
         solver_engine.warm_up_async()

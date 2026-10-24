@@ -20,7 +20,7 @@ import {
 } from "@/components/Icons";
 import { useApp } from "@/state/AppStore";
 import { COLOR_NAMES, FACE_NAMES } from "@/lib/colors";
-import { COLOR_CODES, FACE_ORDER, type ColorCode } from "@/lib/types";
+import { COLOR_CODES, FACE_ORDER, type ColorCode, type ColorModelInfo } from "@/lib/types";
 
 export default function ScannerPage({ navigate }: { navigate: (page: PageId) => void }) {
   const { snapshot, detection, send } = useApp();
@@ -253,6 +253,13 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
                 <p>
                   <b style={{ color: "var(--ink)" }}>Live read</b>
                 </p>
+                {snapshot?.colorModel && (
+                  <p title={colorModelNote(snapshot.colorModel)} style={{ margin: "4px 0" }}>
+                    <Tag tone={snapshot.colorModel.active === "cnn" ? "brand" : "default"}>
+                      Colour model: {snapshot.colorModel.active === "cnn" ? "CNN" : "HSV"}
+                    </Tag>
+                  </p>
+                )}
                 <p style={{ color: "var(--ink-3)" }}>
                   {detection
                     ? `${detection.colors.join(" ")} · weakest ${(detection.minConfidence * 100).toFixed(0)}%`
@@ -390,4 +397,12 @@ export default function ScannerPage({ navigate }: { navigate: (page: PageId) => 
       <DatasetCard />
     </>
   );
+}
+
+/** The colour model tag's tooltip: why this model, and the CNN's test result (Phase 11). */
+function colorModelNote(info: ColorModelInfo): string {
+  const model = info.model;
+  if (!model || model.cnnAccuracy == null || model.hsvAccuracy == null) return info.reason;
+  const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
+  return `${info.reason}. On ${model.testScans} held-out scans: CNN ${percent(model.cnnAccuracy)}, HSV ${percent(model.hsvAccuracy)}.`;
 }

@@ -32,6 +32,8 @@ SOLVER_TABLE_DIR = CACHE_DIR / "twophase"
 DOCS_DIR = PROJECT_ROOT / "docs"
 #: Training data for the Phase 11 colour classifier (committed to git; see ml/data/README.md).
 DATASET_DIR = Path(os.environ.get("CUBE_DATASET_DIR") or PROJECT_ROOT / "ml" / "data")
+#: The trained colour classifier, written by ml/train.py (Phase 11).
+MODEL_DIR = Path(os.environ.get("CUBE_MODEL_DIR") or PROJECT_ROOT / "ml" / "models")
 
 #: Local development database (used when DATABASE_URL is not set).
 DEFAULT_SQLITE_FILE = DATA_DIR / "cube.db"
@@ -77,6 +79,8 @@ class RuntimeConfig:
     gemini_embed_model: str                   # the RAG coach's embedding model (Phase 7)
     ai_requests_per_minute: int               # the app's own limits, below Google's
     ai_requests_per_day: int
+    # Phase 11: "auto" (the CNN if it beat HSV on its test scans), "hsv" or "cnn".
+    color_model: str = "auto"
 
     @property
     def is_production(self) -> bool:
@@ -164,6 +168,10 @@ def read_runtime_config(env: Mapping[str, str]) -> RuntimeConfig:
         raw_database_url = f"sqlite:///{DEFAULT_SQLITE_FILE.as_posix()}"
     database_url = normalize_database_url(raw_database_url)
 
+    color_model = (env.get("CUBE_COLOR_MODEL") or "").strip().lower() or "auto"
+    if color_model not in ("auto", "hsv", "cnn"):
+        raise ConfigError(f"CUBE_COLOR_MODEL must be auto, hsv or cnn, got {color_model!r}")
+
     thinking_level = (env.get("GEMINI_THINKING_LEVEL") or "").strip().lower()
     if thinking_level and thinking_level not in THINKING_LEVELS:
         raise ConfigError(f"GEMINI_THINKING_LEVEL must be one of {', '.join(THINKING_LEVELS)} (or empty)")
@@ -186,6 +194,7 @@ def read_runtime_config(env: Mapping[str, str]) -> RuntimeConfig:
         gemini_embed_model=(env.get("GEMINI_EMBED_MODEL") or "").strip() or DEFAULT_EMBED_MODEL,
         ai_requests_per_minute=_count(env, "AI_REQUESTS_PER_MINUTE", 10),
         ai_requests_per_day=_count(env, "AI_REQUESTS_PER_DAY", 200),
+        color_model=color_model,
     )
 
 

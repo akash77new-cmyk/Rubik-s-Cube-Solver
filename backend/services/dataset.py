@@ -68,12 +68,16 @@ def build_scan_record(
     camera: Mapping[str, Any],
     detector: Mapping[str, Any],
     scan_id: Optional[str] = None,
+    color_model: str = "hsv",
 ) -> Dict[str, Any]:
     """Describe one confirmed scan as plain JSON-ready data.
 
     ``labels`` are the confirmed colours (face -> 9 codes). ``readings`` are the
     detector's sticker readings captured with the camera (``StickerReading.to_dict()``
-    per sticker). Raises ValueError if anything is missing or malformed.
+    per sticker). ``color_model`` is the model that made ``predicted``: "hsv" or "cnn"
+    (Phase 11); ``hsvPredicted`` is always the HSV detector's colour, so the HSV
+    baseline can be measured on every scan. Raises ValueError if anything is missing
+    or malformed.
     """
     if lighting not in LIGHTING_OPTIONS:
         raise ValueError(f"Unknown lighting {lighting!r}; use one of {', '.join(LIGHTING_OPTIONS)}")
@@ -95,6 +99,7 @@ def build_scan_record(
                     "index": index,
                     "label": label,
                     "predicted": reading["color"],
+                    "hsvPredicted": reading.get("hsvColor") or reading["color"],
                     "corrected": reading["color"] != label,
                     "confidence": reading["confidence"],
                     "alternatives": list(reading.get("alternatives", [])),
@@ -109,6 +114,7 @@ def build_scan_record(
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "lighting": lighting,
         "profile": profile,
+        "colorModel": color_model,
         "camera": dict(camera),
         "detector": dict(detector),
         "centers": {face: labels[face][4] for face in FACE_ORDER},

@@ -7,8 +7,9 @@ Pipeline per frame::
       -> BGR2HSV
       -> 9 patch samples on a 3x3 grid
       -> robust per-patch HSV (circular median hue, median S/V)
-      -> ColorProfile.rank -> (colour, confidence, runner-up colours, uncertain?)
       -> a 32x32 crop of each sticker from the raw frame (training data, Phase 2)
+      -> colour, confidence, runner-up colours, uncertain?  from ColorProfile.rank (HSV),
+         or from the trained CNN on the crops when it is active (Phase 11)
       -> temporal stability check  (N identical consecutive reads)
 
 Sampling a *patch* and taking the median - rather than the single centre pixel
@@ -29,6 +30,7 @@ import numpy as np
 
 from backend.core.color import HUE_MAX, ColorProfile, ColorScore, uncertainty
 from backend.core.cube import COLOR_NAMES
+from backend.vision.classifier import StickerClassifier, cnn_uncertainty
 
 #: Side length, in pixels, of the sticker crops saved for the Phase 11 classifier.
 CROP_SIZE = 32
@@ -53,6 +55,9 @@ class StickerReading:
     alternatives: Tuple[ColorScore, ...] = ()
     #: ``None``, or why the reading is doubtful (see ``backend.core.color``).
     uncertain: Optional[str] = None
+    #: The HSV detector's colour. The same as ``color`` unless the CNN is active; kept so
+    #: the dataset can always measure the HSV baseline (Phase 11).
+    hsv_color: Optional[str] = None
 
     def to_dict(self) -> Dict[str, object]:
         return {
@@ -67,6 +72,7 @@ class StickerReading:
             "confidence": self.confidence,
             "alternatives": [score.to_dict() for score in self.alternatives],
             "uncertain": self.uncertain,
+            "hsvColor": self.hsv_color or self.color,
         }
 
 
@@ -135,8 +141,11 @@ class FaceDetector:
         sample_radius: int = 10,
         offset_y: int = 0,
         stability_window: int = 6,
+        classifier: Optional[StickerClassifier] = None,
     ) -> None:
         self.profile = profile or ColorProfile.preset("default")
+        #: The trained CNN (Phase 11), or None: then HSV decides the colours.
+        self.classifier = classifier
         self.spacing = spacing
         self.sample_radius = sample_radius
         self.offset_y = offset_y
@@ -189,9 +198,8 @@ class FaceDetector:
 
         cx, cy = width // 2, height // 2 + self.offset_y
         radius = self.sample_radius
-        readings: List[StickerReading] = []
+        cells = []  # (row, col, x, y, (h, s, v), HSV ranking)
         crops: List[np.ndarray] = []
-
         for row in range(3):
             for col in range(3):
                 x = int(cx + (col - 1) * self.spacing)
@@ -206,26 +214,32 @@ class FaceDetector:
                 h = _circular_median_hue(flat[:, 0])
                 s = float(np.median(flat[:, 1]))
                 v = float(np.median(flat[:, 2]))
-
-                ranking = self.profile.rank(h, s, v)
-                best = ranking[0]
-                readings.append(
-                    StickerReading(
-                        index=row * 3 + col,
-                        row=row,
-                        col=col,
-                        x=x,
-                        y=y,
-                        hsv=(int(round(h)), int(round(s)), int(round(v))),
-                        color=best.code,
-                        confidence=best.confidence,
-                        alternatives=tuple(ranking[:3]),
-                        uncertain=uncertainty(ranking),
-                    )
-                )
+                cells.append((row, col, x, y, (h, s, v), self.profile.rank(h, s, v)))
                 # Crop from the raw frame: the overlay is drawn later, and the
                 # classifier should learn from what the camera really saw.
                 crops.append(self._crop(frame_bgr, x, y))
+
+        # The CNN, when active, decides from the crops (one batch for all nine stickers).
+        cnn = self.classifier.rank(crops) if self.classifier is not None and crops else None
+        readings: List[StickerReading] = []
+        for number, (row, col, x, y, (h, s, v), hsv_ranking) in enumerate(cells):
+            ranking = cnn[number] if cnn is not None else hsv_ranking
+            best = ranking[0]
+            readings.append(
+                StickerReading(
+                    index=row * 3 + col,
+                    row=row,
+                    col=col,
+                    x=x,
+                    y=y,
+                    hsv=(int(round(h)), int(round(s)), int(round(v))),
+                    color=best.code,
+                    confidence=best.confidence,
+                    alternatives=tuple(ranking[:3]),
+                    uncertain=cnn_uncertainty(ranking) if cnn is not None else uncertainty(ranking),
+                    hsv_color=hsv_ranking[0].code,
+                )
+            )
 
         signature = tuple(r.color for r in readings)
         self._history.append(signature)

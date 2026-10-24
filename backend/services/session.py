@@ -63,6 +63,7 @@ from backend.services.logbus import LogBus
 from backend.services.profiles import ProfileStore
 from backend.services.settings import SettingsStore
 from backend.vision.camera import CameraStream, list_cameras
+from backend.vision.classifier import StickerClassifier
 from backend.vision.detector import CROP_SIZE, DetectionResult, FaceDetector
 from backend.vision.overlay import OverlayRenderer, encode_jpeg
 
@@ -91,6 +92,8 @@ class SolveSession:
         dataset: Optional[DatasetStore] = None,
         database: Optional[Database] = None,
         ai: Optional[AIService] = None,
+        classifier: Optional[StickerClassifier] = None,
+        color_model: Optional[Dict[str, Any]] = None,
     ) -> None:
         self._settings = settings
         self._profiles = profiles
@@ -120,7 +123,10 @@ class SolveSession:
             spacing=config.grid_spacing,
             sample_radius=config.sample_radius,
             offset_y=config.grid_offset_y,
+            classifier=classifier,
         )
+        #: Which colour model the scanner uses and why (Phase 11), for the Scanner page.
+        self._color_model = color_model or {"mode": "hsv", "active": "hsv", "reason": "", "model": None}
         self.overlay = OverlayRenderer(style=config.arrow_style)
 
         self._lock = threading.RLock()
@@ -1144,6 +1150,7 @@ class SolveSession:
             labels=labels,
             readings=readings,
             profile=settings.active_profile,
+            color_model=self._color_model["active"],
             camera={
                 "index": settings.camera_index,
                 "resolution": self.camera.status().get("resolution"),
@@ -1432,6 +1439,7 @@ class SolveSession:
                 expand_for_physical_turns(solution.moves) if solution else []
             ),
             "dataset": self.dataset_state(),
+            "colorModel": self._color_model,
             "database": self._database.status() if self._database is not None else None,
             "ai": self._ai.status() if self._ai is not None else None,
             "repair": self.repair_state(),

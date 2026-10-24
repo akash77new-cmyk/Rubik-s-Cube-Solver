@@ -61,8 +61,8 @@ export interface ColorScoreInfo {
   inRange: boolean;
 }
 
-/** Why a reading is doubtful: outside every colour range, or inside two. */
-export type UncertainReason = "no_range" | "two_ranges";
+/** Why a reading is doubtful: outside every colour range, inside two, or (Phase 11) the CNN was unsure. */
+export type UncertainReason = "no_range" | "two_ranges" | "low_confidence";
 
 export interface StickerReading {
   index: number;
@@ -77,6 +77,22 @@ export interface StickerReading {
   /** Best three colours, best first. */
   alternatives: ColorScoreInfo[];
   uncertain: UncertainReason | null;
+  /** The HSV detector's colour (the same as `color` unless the CNN is active). */
+  hsvColor: ColorCode;
+}
+
+/** The scanner's colour model (Phase 11): the trained CNN or the HSV detector, and why. */
+export interface ColorModelInfo {
+  mode: "auto" | "hsv" | "cnn";
+  active: "hsv" | "cnn";
+  reason: string;
+  model: {
+    trainedAt: string;
+    testScans: number;
+    cnnAccuracy: number | null;
+    hsvAccuracy: number | null;
+    beatsHsv: boolean;
+  } | null;
 }
 
 export interface DetectionInfo {
@@ -323,6 +339,7 @@ export interface Snapshot {
   detection: DetectionInfo | null;
   physicalSteps: string[];
   dataset: DatasetInfo;
+  colorModel: ColorModelInfo;
   database: DatabaseInfo | null;
   ai: AIStatus | null;
   repair: RepairInfo | null;

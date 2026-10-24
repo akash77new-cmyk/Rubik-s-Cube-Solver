@@ -2,9 +2,10 @@
 
 backend.config reads environment variables at import time, so they are set here,
 before any test module imports the backend. Tests must never touch the real data/
-folder, the committed ml/data/ dataset or a real database, so CUBE_DATA_DIR and
-CUBE_DATASET_DIR point at throwaway temp folders, and DATABASE_URL is emptied (an
-empty value wins over .env, so the default - SQLite in the temp folder - is used).
+folder, the committed ml/data/ dataset, the trained model in ml/models/ or a real
+database, so CUBE_DATA_DIR, CUBE_DATASET_DIR and CUBE_MODEL_DIR point at throwaway temp
+folders, and DATABASE_URL is emptied (an empty value wins over .env, so the default -
+SQLite in the temp folder - is used).
 
 Database tests run on SQLite, and also on PostgreSQL when CUBE_TEST_POSTGRES_URL
 points at a throwaway Postgres server (see docs: the Docker command in README.md).
@@ -16,6 +17,7 @@ import tempfile
 os.environ["APP_ENV"] = "development"
 os.environ["CUBE_DATA_DIR"] = tempfile.mkdtemp(prefix="cube-test-data-")
 os.environ["CUBE_DATASET_DIR"] = tempfile.mkdtemp(prefix="cube-test-dataset-")
+os.environ["CUBE_MODEL_DIR"] = tempfile.mkdtemp(prefix="cube-test-model-")
 os.environ["DATABASE_URL"] = ""
 
 import pytest  # noqa: E402 - the environment above must be set first

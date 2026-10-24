@@ -8,6 +8,7 @@ import { useApp } from "@/state/AppStore";
 const REASON_TEXT: Record<UncertainReason, string> = {
   no_range: "outside every colour range",
   two_ranges: "inside two colour ranges",
+  low_confidence: "the trained model was unsure",
 };
 
 const percent = (value: number) => `${Math.round(value * 100)}%`;
