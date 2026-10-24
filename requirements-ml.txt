@@ -1,0 +1,7 @@
+# Training the sticker colour CNN (Phase 11), on a laptop only:
+#   python -m pip install -r requirements-ml.txt
+#   python ml/train.py
+# The app itself never needs these: it runs the exported ONNX model with OpenCV.
+-r requirements.txt
+torch>=2.5      # on Windows and macOS, PyPI's torch is the CPU build (about 200 MB)
+onnx>=1.16      # used by torch.onnx.export
