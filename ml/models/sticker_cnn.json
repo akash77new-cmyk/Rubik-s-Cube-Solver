@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "classes": [
+    "W",
+    "Y",
+    "R",
+    "O",
+    "G",
+    "B"
+  ],
+  "input": {
+    "size": 32,
+    "order": "BGR",
+    "mean": 0.5,
+    "std": 0.25
+  },
+  "trainedAt": "2026-10-24 17:48 UTC",
+  "commit": "2657d84",
+  "torch": "2.14.1",
+  "epochs": 40,
+  "seed": 0,
+  "parameters": 24198,
+  "trainSeconds": 17.8,
+  "finalLoss": 0.3173,
+  "train": {
+    "scans": 8,
+    "stickers": 432,
+    "ids": [
+      "20261021-142437-39105e",
+      "20261021-170554-1f1383",
+      "20261021-220436-7a4271",
+      "20261024-140205-2a17cb",
+      "20261024-140643-3732a3",
+      "20261024-141019-d49d4e",
+      "20261024-170429-615612",
+      "20261024-172046-958523"
+    ]
+  },
+  "test": {
+    "scans": 2,
+    "stickers": 108,
+    "cnnCorrect": 105,
+    "hsvCorrect": 108,
+    "cnnAccuracy": 0.9722,
+    "hsvAccuracy": 1.0,
+    "beatsHsv": false,
+    "fixedHsvMistakes": 0,
+    "newMistakes": 3,
+    "meanConfidence": 0.939,
+    "perColor": {
+      "W": 1.0,
+      "Y": 1.0,
+      "R": 0.8889,
+      "O": 1.0,
+      "G": 1.0,
+      "B": 0.9444
+    },
+    "confusion": [
+      [
+        18,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        18,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        16,
+        2,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        18,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        18,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        0,
+        0,
+        17
+      ]
+    ],
+    "perScan": [
+      {
+        "id": "20261024-170715-561a80",
+        "lighting": "glare",
+        "cnnCorrect": 53,
+        "hsvCorrect": 54,
+        "stickers": 54
+      },
+      {
+        "id": "20261024-171129-99637a",
+        "lighting": "dim",
+        "cnnCorrect": 52,
+        "hsvCorrect": 54,
+        "stickers": 54
+      }
+    ]
+  },
+  "onnxBytes": 98316,
+  "onnxMaxDifference": 2.384185791015625e-07
+}
