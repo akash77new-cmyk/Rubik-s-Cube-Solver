@@ -38,6 +38,7 @@ from backend.ai.repair_agent import RepairContext
 from backend.ai.retrieval import LessonIndex
 from backend.ai.tutor import TutorContext
 from backend.ai.tracing import Trace, TraceStore
+from backend.ai.vision import StickerVision
 from backend.db.database import Database, StorageError
 
 log = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ Publish = Callable[[str, Any], None]
 #: The Smart Repair Agent's time limit. A repair needs two Gemini requests, and on
 #: Render one request can take up to ~30 s (a 25 s timeout, then the retry), so a
 #: 30 s limit sometimes stopped the agent before its answer (seen at the Phase 5 go-live).
+#: With the vision check (Phase 11) it can be four, but only after a local camera scan.
 REPAIR_DEADLINE_SECONDS = 60.0
 #: The coach's time limit: one embedding request and about two model requests, so the
 #: same slow-request margin as the repair agent.
@@ -250,13 +252,15 @@ class AIService:
                 trace.error_step("ai_off", reason)
                 answer = repair_agent.fallback_answer(context, reason)
             else:
+                # The look tool's vision request shares the budget and appears in this trace.
+                context.vision = StickerVision(BudgetedLLM(self._llm, self._budget), trace).look
                 task = AgentTask(
                     repair_agent.SYSTEM_PROMPT,
                     context.question(),
                     repair_agent.build_tools(context),
-                    repair_agent.TOOL_NAMES,
+                    context.tool_names(),
                     repair_agent.ANSWER_SCHEMA,
-                    max_steps=4,
+                    max_steps=5,
                     deadline_seconds=REPAIR_DEADLINE_SECONDS,
                     answer_check=context.check_answer,
                 )

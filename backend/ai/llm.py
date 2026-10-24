@@ -50,14 +50,17 @@ class Message:
     text: str = ""
     tool_calls: List[ToolCall] = field(default_factory=list)
     tool_results: List[ToolResult] = field(default_factory=list)
+    #: PNG images sent with a user message, after its text (Phase 11: sticker crops for the
+    #: vision check). Only small crops are ever sent, never a camera frame.
+    images: List[bytes] = field(default_factory=list)
     #: The provider's own copy of a model turn, sent back unchanged in the next
     #: request. Gemini 3 hides a "thought signature" in it, and rejects a request
     #: that changes or drops it.
     raw: Optional[Dict[str, Any]] = None
 
     @classmethod
-    def user(cls, text: str) -> "Message":
-        return cls(role="user", text=text)
+    def user(cls, text: str, images: Optional[List[bytes]] = None) -> "Message":
+        return cls(role="user", text=text, images=list(images or []))
 
     @classmethod
     def results(cls, results: List[ToolResult]) -> "Message":

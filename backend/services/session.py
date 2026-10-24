@@ -588,7 +588,9 @@ class SolveSession:
         readings = None
         if all(self._scanned.get(face, {}).get("stickers") for face in FACE_ORDER):
             readings = {face: list(self._scanned[face]["stickers"]) for face in FACE_ORDER}
-        context = RepairContext(cube, readings)
+        # The sticker images, for the agent's vision check (Phase 11); None if any face lacks them.
+        crops = {face: list(self._scan_crops[face]) for face in FACE_ORDER if face in self._scan_crops}
+        context = RepairContext(cube, readings, crops)
         with self._lock:
             self._repair = {"status": "working", "cube": cube.to_color_string()}
         self._logs.info("The cube is not solvable: looking for misread stickers", source="repair")

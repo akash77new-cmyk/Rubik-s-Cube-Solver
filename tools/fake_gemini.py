@@ -12,7 +12,10 @@ It answers ``generateContent`` the way Gemini 3 does, and is strict where Gemini
 
 It is not a model. For the Cube Assistant it calls get_solution, then answers with
 final_answer from what the tool returned. For the Smart Repair Agent (Phase 5) it calls
-find_fixes, then picks the first fix, or asks for a rescan if there is none. For the RAG
+find_fixes; when several fixes fit and it may look (Phase 11), it calls look_at_stickers and
+picks the fix the vision check agrees with, else the first fix, or asks for a rescan if
+there is none. A vision request (report_colours) is answered by comparing each sticker
+image's average colour with the six centre images. For the RAG
 coach (Phase 7) it calls search_lessons with the question, then cites the first passage.
 For the AI Tutor (Phase 8) it gives the app's own hint text back, searches the lessons for a
 question, and writes a recap from the stats it was given.
@@ -23,11 +26,15 @@ search works end to end. tests/test_ai_end_to_end.py uses it too.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
+
+import cv2
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so "backend" imports work
 
@@ -77,6 +84,8 @@ def answer(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
     results = [part["functionResponse"] for part in contents[-1].get("parts", []) if "functionResponse" in part]
     declarations = [d for tool in body.get("tools", []) for d in tool.get("functionDeclarations", [])]
     tools = {d["name"] for d in declarations}
+    if "report_colours" in tools:  # the vision check (Phase 11)
+        return _vision(contents[0], next(d for d in declarations if d["name"] == "report_colours"))
     final = next((d for d in declarations if d["name"] == "final_answer"), {})
     if "message" in final.get("parameters", {}).get("properties", {}) and "search_lessons" in tools:
         return _tutor(contents, results)
@@ -91,12 +100,25 @@ def answer(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
         text = f"The lesson \"{first['section']}\" covers this: {first['text'].split('. ')[0]}."
         return 200, _call("final_answer", {"answer": text[:900], "citations": [first["id"]], "covered": True})
     if "find_fixes" in tools:  # the Smart Repair Agent
-        if not results:
+        done = {
+            part["functionResponse"]["name"]: part["functionResponse"].get("response", {})
+            for content in contents for part in content.get("parts", []) if "functionResponse" in part
+        }
+        if "find_fixes" not in done:
             return 200, _call("find_fixes", {})
-        fixes = results[0].get("response", {}).get("fixes", [])
+        fixes = done["find_fixes"].get("fixes", [])
+        if len(fixes) > 1 and "look_at_stickers" in tools and "look_at_stickers" not in done:
+            return 200, _call("look_at_stickers", {})
         if fixes:
-            message = f"Fix {fixes[0]['id']} is the most likely: the camera doubted those stickers."
-            return 200, _call("final_answer", {"action": "apply_fix", "fix_id": fixes[0]["id"], "message": message})
+            seen = {row["sticker"]: row for row in done.get("look_at_stickers", {}).get("stickers", [])}
+            agreed = [
+                fix for fix in fixes
+                if seen and all(seen.get(c["sticker"], {}).get("vision_sees") == c["to"] for c in fix["changes"])
+            ]
+            fix = (agreed or fixes)[0]
+            why = "the vision check agrees" if agreed else "the camera doubted those stickers"
+            message = f"Fix {fix['id']} is the most likely: {why}."
+            return 200, _call("final_answer", {"action": "apply_fix", "fix_id": fix["id"], "message": message})
         return 200, _call("final_answer", {"action": "rescan_side", "side": "U", "message": "Rescan the top side."})
     if not results:
         return 200, _call("get_solution", {})
@@ -106,6 +128,24 @@ def answer(body: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
     else:
         text = "There is no solution yet. Press Solve first."
     return 200, _call("final_answer", {"answer": text, "suggestions": ["How do I do step 1?"]})
+
+
+def _vision(content: Dict[str, Any], declaration: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+    """The vision check: each sticker gets the colour of the centre image nearest in average colour."""
+    images: List[np.ndarray] = []
+    for part in content.get("parts", []):
+        if "inlineData" in part:
+            data = np.frombuffer(base64.b64decode(part["inlineData"]["data"]), np.uint8)
+            images.append(cv2.imdecode(data, cv2.IMREAD_COLOR).reshape(-1, 3).mean(axis=0))
+    item = declaration["parameters"]["properties"]["stickers"]["items"]["properties"]
+    ids, names = item["id"]["enum"], item["color"]["enum"]
+    if len(images) != 6 + len(ids):
+        return _error(400, f"Expected {6 + len(ids)} images, got {len(images)}")
+    centres, rows = images[:6], []
+    for sticker_id, image in zip(ids, images[6:]):
+        distances = sorted((float(np.linalg.norm(image - centre)), name) for centre, name in zip(centres, names))
+        rows.append({"id": sticker_id, "color": distances[0][1], "sure": distances[0][0] < 0.6 * distances[1][0]})
+    return 200, _call("report_colours", {"stickers": rows})
 
 
 def _tutor(contents: Any, results: Any) -> Tuple[int, Dict[str, Any]]:

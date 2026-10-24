@@ -10,7 +10,7 @@ def test_retrieval_guardrails_and_fallbacks_pass_their_gates():
     retrieval = eval_ai.eval_retrieval()
     assert retrieval["gate"] and retrieval["keywords"]["recall@3"] >= 13
     guardrails = eval_ai.eval_guardrails()
-    assert guardrails["passed"] == guardrails["total"] == 12, guardrails["cases"]
+    assert guardrails["passed"] == guardrails["total"] == 14, guardrails["cases"]
     assert eval_ai.eval_fallbacks()["gate"]
 
 

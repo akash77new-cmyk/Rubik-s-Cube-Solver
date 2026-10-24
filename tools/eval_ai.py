@@ -11,12 +11,14 @@ Offline (deterministic, every push in CI; the run fails if a gate fails):
   4. guardrails  - misbehaving model answers: does code catch every one?
   5. fallbacks   - with AI off, does every feature still give a valid answer?
 
-Live (by hand, with a real key, about 90 requests over 10 minutes, paced under the
+Live (by hand, with a real key, about 125 requests over 16 minutes, paced under the
 app's limit of 10 a minute):
   6. the same retrieval with Gemini's real embeddings
   7. the coach on the 15 questions + 3 it must refuse: cites the right section?
   8. the repair agent on 9 misreads, against the built-in search
   9. the tutor's hints on 12 learner states: accepted first time, no moves in hint 1
+ 10. the repair agent with the vision check (Phase 11) on the 6 ambiguous misreads, with
+     sticker images under different lights: does looking turn rescans into the true fix?
 
 Reports: docs/eval/offline.md (+ .json) and docs/eval/live.md (+ .json). Numbers come
 only from runs; nothing is typed in by hand. Never prints the API key.
@@ -44,6 +46,7 @@ from backend.ai.agent import FINAL_ANSWER, AgentStopped, AgentTask, run_agent  #
 from backend.ai.budget import RequestBudget  # noqa: E402
 from backend.ai.coach import CoachContext  # noqa: E402
 from backend.ai.fake import HashEmbedder, ScriptedLLM, tool_call, tool_calls  # noqa: E402
+from backend.ai.llm import LLMError  # noqa: E402
 from backend.ai.lessons import EVAL_QUESTIONS, load_lessons  # noqa: E402
 from backend.ai.repair_agent import RepairContext  # noqa: E402
 from backend.ai.repair_agent import fallback_answer as repair_fallback  # noqa: E402
@@ -52,10 +55,12 @@ from backend.ai.schema import validate  # noqa: E402
 from backend.ai.service import AIService  # noqa: E402
 from backend.ai.tools import Tool, ToolRegistry  # noqa: E402
 from backend.ai.tutor import TutorContext, move_runs  # noqa: E402
+from backend.ai.vision import StickerVision  # noqa: E402
 from backend.core import beginner  # noqa: E402
 from backend.core.cube import COLOR_CODES, FACE_ORDER, CubeState, random_scramble  # noqa: E402
 from backend.db import connect  # noqa: E402
 from backend.services.learn import LearnSession  # noqa: E402
+from backend.vision.overlay import COLOR_BGR  # noqa: E402
 
 REPORT_DIR = ROOT / "docs" / "eval"
 
@@ -148,6 +153,34 @@ def ambiguous_seeds(start: int, how_many: int) -> List[int]:
             seeds.append(seed)
         seed += 1
     return seeds
+
+
+#: Simulated lights for the vision check's sticker images: (brightness, blue/green/red gains).
+LIGHTS = {"daylight": (1.0, (1.0, 1.0, 1.0)), "warm bulb": (0.9, (0.72, 0.95, 1.12)), "dim": (0.55, (1.0, 1.0, 1.0))}
+
+
+def camera_crops(cube: CubeState, light: str, seed: int) -> Dict[str, List[Any]]:
+    """32 x 32 sticker images of the real cube under one light, with shading and noise."""
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    brightness, gains = LIGHTS[light]
+    crops: Dict[str, List[Any]] = {}
+    for face in FACE_ORDER:
+        crops[face] = []
+        for code in cube.face(face):
+            colour = np.array(COLOR_BGR[code], np.float32) * np.array(gains, np.float32) * brightness
+            ramp = np.linspace(0.92, 1.08, 32, dtype=np.float32)[None, :, None]
+            image = colour[None, None, :] * ramp + rng.normal(0, 6, (32, 32, 3))
+            crops[face].append(np.clip(image, 0, 255).astype(np.uint8))
+    return crops
+
+
+def true_cube(scan: CubeState, truth: Truth) -> CubeState:
+    facelets = scan.facelets
+    for face, index, color in truth:
+        facelets[face][index] = color
+    return CubeState(facelets)
 
 
 def is_true_fix(context: RepairContext, fix_id: Optional[int], truth: Truth) -> bool:
@@ -292,6 +325,17 @@ def _guard_cases() -> List[Tuple[str, Callable[[], bool]]]:
             return True
         return False
 
+    def vision_refuses(rows: List[Dict[str, Any]]) -> bool:
+        import numpy as np
+
+        centres = {code: np.full((32, 32, 3), COLOR_BGR[code], np.uint8) for code in COLOR_CODES}
+        stickers = [("S1", centres["O"]), ("S2", centres["W"])]
+        try:
+            StickerVision(ScriptedLLM([tool_call("report_colours", stickers=rows)])).look(centres, stickers)
+        except LLMError:
+            return True
+        return False
+
     return [
         ("repair: a fix id the search never returned", lambda: bool(repair.check_answer(
             {"action": "apply_fix", "fix_id": 99, "message": "x"}))),
@@ -313,6 +357,10 @@ def _guard_cases() -> List[Tuple[str, Callable[[], bool]]]:
         ("agent: an answer that breaks the schema is sent back", lambda: loop(
             [tool_call(FINAL_ANSWER, answer=""), ok], echo, ["look"], schema) == {"answer": "fine"}),
         ("agent: a model that never answers is stopped", stops),
+        ("vision: an answer that leaves out a sticker is refused", lambda: vision_refuses(
+            [{"id": "S1", "color": "Orange", "sure": True}])),
+        ("vision: a colour that isn't on a cube is refused", lambda: vision_refuses(
+            [{"id": "S1", "color": "Purple", "sure": True}, {"id": "S2", "color": "White", "sure": True}])),
     ]
 
 
@@ -472,6 +520,29 @@ def live_evals(per_minute: float) -> Dict[str, Any]:
                          "builtInRight": sum(c["builtInRight"] for c in mine)}
     out["repair"] = {"modes": by_mode, "answeredByGemini": sum(c["gemini"] for c in cases), "cases": cases}
 
+    print("  repair agent with the vision check: the 6 ambiguous misreads, with sticker images ...", flush=True)
+    looks = []
+    lights = list(LIGHTS)
+    for mode in MODES:
+        for number, seed in enumerate(ambiguous):
+            scan, readings, truth = misread_case(seed, mode, 2)
+            light = lights[(MODES.index(mode) * 2 + number) % len(lights)]
+            context = RepairContext(scan, readings, camera_crops(true_cube(scan, truth), light, seed))
+            proposal = ai.repair(context)
+            changed = {(c["face"], c["index"], c["to"]) for c in proposal["changes"]}
+            right = proposal["action"] == "apply_fix" and changed == set(truth)
+            looks.append({"mode": mode, "light": light, "gemini": proposal["source"] != "search",
+                          "looked": bool(context.looked and "stickers" in context.looked),
+                          "action": proposal["action"], "agentRight": right,
+                          "agentWrongFix": proposal["action"] == "apply_fix" and not right,
+                          "requests": proposal["requests"]})
+    out["vision"] = {
+        "cases": len(looks), "answeredByGemini": sum(c["gemini"] for c in looks),
+        "looked": sum(c["looked"] for c in looks), "agentRight": sum(c["agentRight"] for c in looks),
+        "agentRescans": sum(c["action"] == "rescan_side" for c in looks),
+        "agentWrongFix": sum(c["agentWrongFix"] for c in looks), "rows": looks,
+    }
+
     print("  tutor: hints on 12 learner states ...", flush=True)
     hints = []
     for number, learn in enumerate(learner_states(12)):
@@ -554,7 +625,8 @@ def offline_markdown(r: Dict[str, Any], meta: Dict[str, str]) -> str:
         "",
         "The cube's invariants are strict: one or two misread stickers almost always leave exactly one valid fix. "
         "Only in the rare ambiguous cases does the camera's evidence decide, and with no evidence the built-in "
-        "search can pick a wrong fix; the agent may ask for a rescan instead (see the live report).",
+        "search can pick a wrong fix; the agent may ask for a rescan instead, or look at the sticker images "
+        "(Phase 11; see the live report).",
         "",
         "## 3. Beginner method (Solve & Learn)",
         "",
@@ -630,6 +702,27 @@ def live_markdown(r: Dict[str, Any], meta: Dict[str, str]) -> str:
         "(the rest: the built-in search after a timeout or a limit). A wrong fix is the costly mistake; "
         "a rescan is the safe one.",
         "",
+    ]
+    vis = r.get("vision")
+    if vis:
+        before = [c for c in rep["cases"] if not c["uniqueFix"]]
+        lines += [
+            "## Repair agent with the vision check (Phase 11)",
+            "",
+            "The 6 ambiguous misreads again, now with 32 x 32 images of the stickers (simulated daylight, warm bulb "
+            "and dim light), so the agent can call look_at_stickers.",
+            "",
+            "| Cases | Answered by Gemini | Agent looked | Agent picked the true fix | Agent asked for a rescan | "
+            "Agent picked a wrong fix |",
+            "| --- | --- | --- | --- | --- | --- |",
+            f"| {vis['cases']} | {vis['answeredByGemini']} | {vis['looked']} | {vis['agentRight']} | "
+            f"{vis['agentRescans']} | {vis['agentWrongFix']} |",
+            "",
+            f"Without the images (the table above), the agent picked the true fix in "
+            f"{sum(c['agentRight'] for c in before)} of these {len(before)} cases.",
+            "",
+        ]
+    lines += [
         "## Tutor hints",
         "",
         "| Hints | Answered by Gemini | Accepted first try | Hint 1 with moves | Median words | p50 / p95 |",
@@ -670,7 +763,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(f"Report: {out_dir / 'offline.md'}")
 
     if args.live:
-        print("AI evaluation: live (real Gemini, paced; about 10 minutes)", flush=True)
+        print("AI evaluation: live (real Gemini, paced; about 16 minutes)", flush=True)
         live = live_evals(args.per_minute)
         (out_dir / "live.json").write_text(json.dumps({**meta, **live}, indent=1) + "\n")
         (out_dir / "live.md").write_text(live_markdown(live, meta))

@@ -436,6 +436,50 @@ def run_offline() -> None:
             assert not wrong, f"wrong labels: {wrong}"
         return "6 synthetic faces scanned by the real detector -> 54 PNGs, all labels correct"
 
+    @check("colour model · the trained CNN or HSV; the vision check picks the fix the images show")
+    def _() -> str:
+        import json
+
+        from backend.ai.budget import RequestBudget
+        from backend.ai.gemini import GeminiClient
+        from backend.ai.repair_agent import RepairContext
+        from backend.ai.service import AIService
+        from backend.config import MODEL_DIR
+        from backend.core.cube import FACE_ORDER
+        from backend.vision.classifier import load_color_model
+        from tools import eval_ai, fake_gemini
+
+        # 1. Which colour model the scanner would use (a trained CNN only if it beat HSV).
+        _, status = load_color_model("auto", MODEL_DIR)
+        model = status["model"]
+        found = (f"CNN {model['cnnAccuracy']:.1%} vs HSV {model['hsvAccuracy']:.1%} on "
+                 f"{model['testScans']} test scans" if model else "no trained model yet")
+        # 2. An ambiguous misread where the built-in search picks the wrong fix...
+        for seed in eval_ai.ambiguous_seeds(0, 10):
+            scan, readings, truth = eval_ai.misread_case(seed, "no-hint", 2)
+            context = RepairContext(scan, readings)
+            if not eval_ai.is_true_fix(context, context.search.candidates[0].id, truth):
+                break
+        else:
+            raise AssertionError("no ambiguous case where the built-in pick is wrong")
+        real = scan.facelets
+        for face, index, color in truth:
+            real[face][index] = color
+        crops = {f: [np.full((32, 32, 3), COLOR_BGR[c], np.uint8) for c in real[f]] for f in FACE_ORDER}
+
+        # 3. ...the agent looks at the sticker images (fake Gemini over the real request format).
+        def transport(url, headers, body, timeout):
+            status_code, payload = fake_gemini.answer(json.loads(body))
+            return status_code, json.dumps(payload).encode("utf-8")
+
+        llm = GeminiClient(fake_gemini.KEY, "gemini-fake", base_url="http://fake/v1beta", transport=transport)
+        proposal = AIService(llm, RequestBudget(10, 100), None, lambda e, d: None).repair(
+            RepairContext(scan, readings, crops))
+        chosen = {(c["face"], c["index"], c["to"]) for c in proposal["changes"]}
+        assert chosen == set(truth), f"the agent chose {chosen}, the truth is {set(truth)}"
+        return (f"colour model: {status['active']} ({found}); ambiguous misread: built-in pick wrong, "
+                f"vision check -> the true fix ({proposal['requests']} requests)")
+
     @check("guided scan · any order, mirrored preview, 1 s hold, a rotated face -> the right cube")
     def _() -> str:
         from backend.core.cube import FACE_ORDER

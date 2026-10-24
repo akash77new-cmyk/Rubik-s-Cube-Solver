@@ -8,6 +8,9 @@ How the work is split (AI rules 1, 2 and 7):
   doubted and the valid fixes, then either picks one fix *by its id* or asks the user
   to rescan one side. It never writes colours or a cube state itself.
 - **The user confirms.** The proposal is only applied when the user presses Apply.
+- **The agent can look** (Phase 11). After a camera scan, ``look_at_stickers`` asks a vision
+  model what colour the stickers the fixes would change really are (``vision.py``): new
+  evidence for the case numbers can't settle, when several fixes fit.
 
 Without AI (no key, quota used up, an error), ``fallback_answer`` proposes the
 search's best fix, or a rescan of the side the camera was least sure about.
@@ -15,9 +18,13 @@ search's best fix, or a rescan of the side the camera was least sure about.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
+import numpy as np
+
+from backend.ai.llm import LLMError
 from backend.ai.tools import NO_ARGS, Tool, ToolRegistry
+from backend.ai.vision import MAX_STICKERS
 from backend.core.cube import COLOR_NAMES, FACE_ORDER, CubeState
 from backend.core.repair import RepairSearch, Readings, find_repairs
 
@@ -30,7 +37,10 @@ How to work:
 2. find_fixes lists the only changes proven to make the cube valid. If one fix is clearly \
 the most likely (the camera doubted the colours it changes), choose it with action \
 "apply_fix" and its fix_id.
-3. If there is no fix, or several fixes are equally likely, choose action "rescan_side" \
+3. If several fixes are possible and look_at_stickers is available, call it: a vision model \
+looks at the camera images of the stickers those fixes would change. Choose the fix whose \
+new colours it sees and is sure about.
+4. If there is no fix, or the fixes are still equally likely, choose action "rescan_side" \
 and the side to rescan (the side whose stickers the camera doubted most).
 
 Rules:
@@ -57,6 +67,12 @@ ANSWER_SCHEMA: Dict[str, Any] = {
 }
 
 TOOL_NAMES = ["get_problems", "get_suspect_stickers", "find_fixes"]
+LOOK_TOOL = "look_at_stickers"
+
+#: (centres: colour code -> crop, stickers: [(id, crop)]) -> id -> {"color", "sure"} (see vision.py)
+Look = Callable[[Dict[str, np.ndarray], Sequence[Tuple[str, np.ndarray]]], Dict[str, Dict[str, Any]]]
+#: Camera crops of a scan: face -> 9 images (32 x 32 BGR).
+Crops = Dict[str, List[np.ndarray]]
 
 POSITIONS = (
     "top-left", "top", "top-right", "left", "centre", "right", "bottom-left", "bottom", "bottom-right",
@@ -66,11 +82,20 @@ POSITIONS = (
 class RepairContext:
     """One unsolvable cube, with the camera's readings, and its search result (computed once)."""
 
-    def __init__(self, cube: CubeState, readings: Optional[Readings] = None) -> None:
+    def __init__(self, cube: CubeState, readings: Optional[Readings] = None, crops: Optional[Crops] = None) -> None:
         self.cube = cube
         self.readings = readings
+        #: The scan's sticker images (Phase 11), or None (a typed or edited cube).
+        self.crops = crops if crops and all(len(crops.get(face, [])) == 9 for face in FACE_ORDER) else None
+        #: The vision check, set by the AI service when Gemini is on; None = no look tool.
+        self.vision: Optional[Look] = None
+        self._looked: Optional[Dict[str, Any]] = None
         self.validation = cube.validate()
         self._search: Optional[RepairSearch] = None
+
+    def tool_names(self) -> List[str]:
+        """The tools this repair may use: look_at_stickers only with camera images and a vision model."""
+        return TOOL_NAMES + ([LOOK_TOOL] if self.crops is not None and self.vision is not None else [])
 
     @property
     def search(self) -> RepairSearch:
@@ -149,6 +174,55 @@ class RepairContext:
         )
         return {"fixes": fixes, "note": note}
 
+    @property
+    def looked(self) -> Optional[Dict[str, Any]]:
+        """What the vision check returned in this repair, or None if the agent didn't look."""
+        return self._looked
+
+    def look(self) -> Dict[str, Any]:
+        """The vision check on the stickers the listed fixes would change (at most once per repair)."""
+        if self._looked is not None:
+            return self._looked
+        if self.crops is None or self.vision is None:
+            return {"error": "No camera images for this cube: decide from the numbers."}
+        stickers: List[Tuple[str, int]] = []
+        for candidate in self.search.candidates:
+            for change in candidate.changes:
+                if (change.face, change.index) not in stickers:
+                    stickers.append((change.face, change.index))
+        stickers = stickers[:MAX_STICKERS]
+        if not stickers:
+            return {"error": "There are no fixes, so there is nothing to look at."}
+        centres = {self.cube.centers[face]: self.crops[face][4] for face in FACE_ORDER}
+        labelled = [(f"S{n + 1}", self.crops[face][index]) for n, (face, index) in enumerate(stickers)]
+        try:
+            seen = self.vision(centres, labelled)
+        except LLMError as exc:
+            self._looked = {"error": f"The vision check failed ({exc}); decide from the numbers."}
+            return self._looked
+        rows = []
+        for n, (face, index) in enumerate(stickers):
+            answer = seen[f"S{n + 1}"]
+            fixes = [
+                f"fix {candidate.id}: {COLOR_NAMES[change.new]}"
+                for candidate in self.search.candidates
+                for change in candidate.changes
+                if (change.face, change.index) == (face, index)
+            ]
+            rows.append({
+                "sticker": self.where(face, index),
+                "scanned_as": COLOR_NAMES[self.cube.facelets[face][index]],
+                "vision_sees": COLOR_NAMES[answer["color"]],
+                "sure": answer["sure"],
+                "fixes_would_make_it": fixes,
+            })
+        self._looked = {
+            "stickers": rows,
+            "note": "A vision model compared each sticker's camera image with the six centres. "
+                    "Prefer the fix whose new colours it sees and is sure about; if none matches, ask for a rescan.",
+        }
+        return self._looked
+
     # --- checking and turning answers into proposals ---------------------------------
     def check_answer(self, answer: Dict[str, Any]) -> List[str]:
         """The agent's extra answer rules (see AgentTask.answer_check)."""
@@ -201,6 +275,10 @@ def build_tools(context: RepairContext) -> ToolRegistry:
             Tool("find_fixes",
                  "Fixes of 1 or 2 sticker changes that are proven to make the cube valid, most likely first.",
                  NO_ARGS, lambda args: context.fixes()),
+            Tool(LOOK_TOOL,
+                 "A vision model looks at the camera images of the stickers the fixes would change, "
+                 "next to the six centres, and says what colour each one is. Use it when several fixes fit.",
+                 NO_ARGS, lambda args: context.look()),
         ]
     )
 

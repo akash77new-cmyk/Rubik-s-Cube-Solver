@@ -10,7 +10,8 @@ One request::
     x-goog-api-key: <key>                  (a header, so the key never appears in a URL)
 
     {"systemInstruction": {"parts": [{"text": "You are ..."}]},
-     "contents": [{"role": "user",  "parts": [{"text": "How many moves?"}]},
+     "contents": [{"role": "user",  "parts": [{"text": "How many moves?"},
+                                              {"inlineData": {"mimeType": "image/png", "data": "<base64>"}}]},
                   {"role": "model", "parts": [{"functionCall": {...}, "thoughtSignature": "..."}]},
                   {"role": "user",  "parts": [{"functionResponse": {"name": ..., "response": {...}}}]}],
      "tools": [{"functionDeclarations": [{"name": ..., "description": ..., "parameters": {...}}]}],
@@ -18,11 +19,13 @@ One request::
      "generationConfig": {"maxOutputTokens": 8192}}
 
 The answer's ``candidates[0].content.parts`` holds text and/or ``functionCall``
-parts, and ``usageMetadata`` holds the token counts.
+parts, and ``usageMetadata`` holds the token counts. Images (Phase 11's vision check)
+go in the same request, as ``inlineData`` parts after the text.
 """
 
 from __future__ import annotations
 
+import base64
 import http.client
 import json
 import time
@@ -165,7 +168,10 @@ class GeminiClient:
                     response["id"] = result.id
                 parts.append({"functionResponse": response})
             return {"role": "user", "parts": parts}
-        return {"role": message.role, "parts": [{"text": message.text}]}
+        parts = [{"text": message.text}]
+        for image in message.images:
+            parts.append({"inlineData": {"mimeType": "image/png", "data": base64.b64encode(image).decode("ascii")}})
+        return {"role": message.role, "parts": parts}
 
     def parse_response(self, payload: Dict[str, Any]) -> LLMResponse:
         """Text, tool calls and token counts from a ``generateContent`` answer."""

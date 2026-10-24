@@ -1,6 +1,6 @@
 {
- "date": "2026-10-24 01:28",
- "commit": "7377f89",
+ "date": "2026-10-24 17:35",
+ "commit": "cacd7fb",
  "retrieval": {
   "sections": 37,
   "keywords": {
@@ -66,7 +66,7 @@
   "movesMedian": 134,
   "movesMax": 185,
   "maxAlgorithmsPerYellowStage": 3,
-  "slowestStepMs": 17.5,
+  "slowestStepMs": 18.7,
   "gate": true
  },
  "guardrails": {
@@ -118,10 +118,18 @@
    {
     "case": "agent: a model that never answers is stopped",
     "passed": true
+   },
+   {
+    "case": "vision: an answer that leaves out a sticker is refused",
+    "passed": true
+   },
+   {
+    "case": "vision: a colour that isn't on a cube is refused",
+    "passed": true
    }
   ],
-  "passed": 12,
-  "total": 12,
+  "passed": 14,
+  "total": 14,
   "gate": true
  },
  "fallbacks": {

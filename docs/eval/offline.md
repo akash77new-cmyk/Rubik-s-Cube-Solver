@@ -1,6 +1,6 @@
 # AI evaluation: offline
 
-Run 2026-10-24 01:28 on commit `7377f89`, with no API key (test embeddings and scripted models).
+Run 2026-10-24 17:35 on commit `cacd7fb`, with no API key (test embeddings and scripted models).
 Made by `python tools/eval_ai.py`; CI runs it on every push. All gates: pass.
 
 ## 1. Retrieval (RAG search)
@@ -24,7 +24,7 @@ Simulated scans of real cubes with misread stickers. The camera's evidence on a 
 | two stickers | 10 | 10 | 10 | 10 / 10 / 10 |
 | two, ambiguous | 10 | 10 | 0 | 10 / 10 / 3 |
 
-The cube's invariants are strict: one or two misread stickers almost always leave exactly one valid fix. Only in the rare ambiguous cases does the camera's evidence decide, and with no evidence the built-in search can pick a wrong fix; the agent may ask for a rescan instead (see the live report).
+The cube's invariants are strict: one or two misread stickers almost always leave exactly one valid fix. Only in the rare ambiguous cases does the camera's evidence decide, and with no evidence the built-in search can pick a wrong fix; the agent may ask for a rescan instead, or look at the sticker images (Phase 11; see the live report).
 
 ## 3. Beginner method (Solve & Learn)
 
@@ -32,11 +32,11 @@ Gate: every cube solved, stages in order, at most 3 algorithms per yellow stage 
 
 | Cubes | Solved | Stages in order | Moves (min / median / max) | Max algorithms per yellow stage | Slowest step |
 | --- | --- | --- | --- | --- | --- |
-| 100 | 100 | 100 | 90 / 134 / 185 | 3 | 17.5 ms |
+| 100 | 100 | 100 | 90 / 134 / 185 | 3 | 18.7 ms |
 
 ## 4. Guardrails
 
-Misbehaving model answers; code must catch each one. 12/12 caught (pass).
+Misbehaving model answers; code must catch each one. 14/14 caught (pass).
 
 | Case | Result |
 | --- | --- |
@@ -52,6 +52,8 @@ Misbehaving model answers; code must catch each one. 12/12 caught (pass).
 | agent: final_answer next to another tool is refused | pass |
 | agent: an answer that breaks the schema is sent back | pass |
 | agent: a model that never answers is stopped | pass |
+| vision: an answer that leaves out a sticker is refused | pass |
+| vision: a colour that isn't on a cube is refused | pass |
 
 ## 5. Fallbacks (AI off)
 
