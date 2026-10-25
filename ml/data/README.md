@@ -33,10 +33,11 @@ ml/data/scans/<scan id>/          one folder per saved scan (id = UTC time + ran
 | `id`, `createdAt` | Scan id and UTC time |
 | `lighting` | `daylight`, `warm`, `cool`, `dim`, `glare` or `other` |
 | `profile` | HSV profile the detector used |
+| `colorModel` | Which model made `predicted`: `hsv` or `cnn` (Phase 11; missing in older scans = `hsv`) |
 | `camera`, `detector` | Camera index/resolution/mirror; grid spacing, sample radius, crop size |
 | `centers` | Centre colour of each face |
 | `counts` | Stickers, corrected stickers, uncertain stickers |
-| `stickers[]` | Per crop: `file`, `face`, `index`, `label` (true colour), `predicted` (HSV detector's colour), `corrected` (label ≠ predicted), `confidence`, `alternatives` (best 3 colours), `hsv`, `uncertain` (`null`, `no_range` or `two_ranges`) |
+| `stickers[]` | Per crop: `file`, `face`, `index`, `label` (true colour), `predicted` (the active model's colour), `hsvPredicted` (the HSV detector's colour, always; older scans: use `predicted`), `corrected` (label ≠ predicted), `confidence`, `alternatives` (best 3 colours), `hsv`, `uncertain` (`null`, `no_range`, `two_ranges` or `low_confidence`) |
 
 ## Properties
 

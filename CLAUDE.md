@@ -49,6 +49,7 @@ vision engine (process 1)  backend/engine.py         single source of truth
    • SolveSession     backend/services/session.py   state machine: scan → solve → playback
    • CameraStream     backend/vision/camera.py      threaded webcam capture
    • FaceDetector     backend/vision/detector.py    HSV sampling, confidence, stability
+   • StickerClassifier backend/vision/classifier.py the trained colour CNN (ONNX via OpenCV, Phase 11)
    • OverlayRenderer  backend/vision/overlay.py     HUD drawn into frames
    • SolverEngine     backend/core/solver.py        Kociemba: C backend, else pure Python
    • cubie model      backend/core/cubie.py         piece model, twist / flip / parity, in_g1
@@ -197,13 +198,29 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 ### 4e. Evaluation and CI (Phase 12)
 - `tools/eval_ai.py` is the AI evaluation suite. Offline (no key) it measures retrieval, the repair
   search, the beginner method, guardrails and fallbacks, and exits 1 if a gate fails; CI runs it.
-  `--live` measures the real model (by hand: about 100 requests, paced). Reports go to `docs/eval/`
+  `--live` measures the real model (by hand: about 125 requests, paced). Reports go to `docs/eval/`
   and contain only measured numbers: never edit them by hand, rerun the tool.
 - A new AI feature gets: guardrail cases in `_guard_cases()`, a fallback check, and (if it uses
   the model) a live evaluation.
 - `.github/workflows/ci.yml` runs on every push: pytest (SQLite + Postgres/pgvector), verify.py,
   the offline evaluation, verify.py --live against the app with the fake Gemini, the frontend
   build and the Docker build. No job may need a secret.
+
+### 4f. The colour classifier and the vision check (Phase 11)
+- `ml/train.py` (PyTorch, laptop only: `requirements-ml.txt`) trains the CNN on `ml/data/scans/`,
+  split **by scan**, and writes `ml/models/sticker_cnn.onnx` + `sticker_cnn.json` (test results)
+  + `docs/eval/classifier.md`. Never edit those numbers by hand; retrain.
+- The app runs the model with `cv2.dnn` (no PyTorch at runtime). `CUBE_COLOR_MODEL=auto` uses it
+  only if `beatsHsv` (at least as accurate as HSV on the test scans); `hsv`/`cnn` force one.
+- The export uses the classic exporter (`dynamo=False`, opset 13): OpenCV 4.10 can't load the new
+  exporter's files. `train.py` checks that OpenCV and PyTorch agree before it writes the report.
+- With the CNN active, `StickerReading.hsv_color` (`hsvPredicted` in the dataset) keeps the HSV
+  colour, so the baseline can be measured on every new scan.
+- The repair agent's `look_at_stickers` tool (`backend/ai/vision.py`) is offered only with camera
+  crops and Gemini on. It sends only 32 x 32 crops (the 6 centres + at most 6 stickers), once per
+  repair, through the same budget and trace; the answer must answer every sticker with a cube
+  colour (`report_colours` schema), else it is refused and the agent decides without it.
+- The Docker image has no `ml/` folder, so production uses HSV (it has no camera anyway).
 
 ## 5. Deployment constraints (Render free tier)
 - **512 MB RAM, 0.1 CPU.** Phase 0 baseline is about 160 MB for all processes. Measure memory
@@ -244,6 +261,7 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 | Live check (app running) | `python tools/verify.py --live` (add `--expect-db postgresql` to require Postgres, `--expect-ai gemini` to require a real AI answer) |
 | AI end to end, no key | `python tools/fake_gemini.py`; app with `GEMINI_API_KEY=test-key GEMINI_BASE_URL=http://127.0.0.1:8799/v1beta`; then `python tools/verify.py --live --expect-ai gemini` |
 | AI evaluation | `python tools/eval_ai.py` (offline, with gates) · `python tools/eval_ai.py --live` (real Gemini, by hand) |
+| Train the colour CNN | `python -m pip install -r requirements-ml.txt` once, then `python ml/train.py` |
 | DB tests on Postgres | `CUBE_TEST_POSTGRES_URL=postgresql://postgres:cube@127.0.0.1:5433/cube_test pytest` (Docker container `cube-pg`, see README) |
 | Migrations | `python -m alembic current` · `python -m alembic upgrade head --sql` (print SQL) |
 | Production mode (Linux) | `APP_ENV=production FLASK_SECRET_KEY=x python run.py --prod` |
@@ -274,6 +292,6 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 | 8 | Solve & Learn + AI Tutor (beginner method, hints, checked moves) | ✅ |
 | 9 | Accounts + multi-user sessions | ⬜ |
 | 10 | Browser camera | ⬜ |
-| 11 | Trained colour classifier + vision-LLM fallback | ⬜ |
+| 11 | Trained colour classifier + vision-LLM fallback | ✅ |
 | 12 | Launch: CI/CD, AI evaluation suite, security pass, docs | ✅ |
 | 13 | Stretch: Practice mode + Learning Path agent | ⬜ |

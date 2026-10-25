@@ -1,6 +1,6 @@
 # AI evaluation: offline
 
-Run 2026-10-24 17:35 on commit `cacd7fb`, with no API key (test embeddings and scripted models).
+Run 2026-10-25 15:47 on commit `9495ed8`, with no API key (test embeddings and scripted models).
 Made by `python tools/eval_ai.py`; CI runs it on every push. All gates: pass.
 
 ## 1. Retrieval (RAG search)
@@ -32,7 +32,7 @@ Gate: every cube solved, stages in order, at most 3 algorithms per yellow stage 
 
 | Cubes | Solved | Stages in order | Moves (min / median / max) | Max algorithms per yellow stage | Slowest step |
 | --- | --- | --- | --- | --- | --- |
-| 100 | 100 | 100 | 90 / 134 / 185 | 3 | 18.7 ms |
+| 100 | 100 | 100 | 90 / 134 / 185 | 3 | 18.9 ms |
 
 ## 4. Guardrails
 

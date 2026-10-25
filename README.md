@@ -44,10 +44,12 @@ rotation arrows drawn over the live feed, and an analytics dashboard tracking ev
 | **Guided scanning** | Colour-only step guide; faces identified by their centre colour (no duplicates, any order); mirrored previews un-mirrored; orientation mistakes repaired by a smallest-change search that only applies unique fixes. |
 | **RAG coach** | Eight short lessons, split into 37 sections and embedded with Gemini; the embeddings live in PostgreSQL with pgvector, and a question finds the nearest sections by cosine distance (NumPy locally, BM25 keywords without embeddings). The coach answers only from those sections and must cite them: every citation is checked against what the search returned. |
 | **Solve & Learn** | Learn the beginner method on your own cube: scan once, then solve it in seven stages, tapping each move you make so the app always knows your cube. Code finds every step and its exact moves (tested on random cubes); an AI tutor gives hints in three levels and answers "why?" from the lessons, and any move sequence it writes must come from the app. |
-| **CI/CD and AI evaluation** | GitHub Actions runs every push: the unit tests on SQLite and on PostgreSQL with pgvector, the pipeline check, all 28 live checks against the running app (with a fake Gemini), the frontend build and the Docker build. Render deploys only after they pass. An evaluation suite measures the AI features (retrieval recall and MRR, repair accuracy, guardrails, fallbacks, and with a key the real model's citations and hints) and writes reports to `docs/eval/`. |
+| **CI/CD and AI evaluation** | GitHub Actions runs every push: the unit tests on SQLite and on PostgreSQL with pgvector, the pipeline check, all 29 live checks against the running app (with a fake Gemini), the frontend build and the Docker build. Render deploys only after they pass. An evaluation suite measures the AI features (retrieval recall and MRR, repair accuracy, guardrails, fallbacks, and with a key the real model's citations and hints) and writes reports to `docs/eval/`. |
 | **Smart repair** | When a scan is unsolvable, a search finds every 1- or 2-sticker change that makes the cube valid (the validator decides), ranked by how unsure the camera was. A Gemini agent reads the problems, the doubtful stickers and these proven fixes, then picks one by its id or asks for a rescan, and explains why. Nothing changes until the user presses Apply; without AI the search's best fix is proposed. |
 | **Plain-English moves** | A "hold the cube like this" step comes first; then every move says which way to turn, seen from where you are ("Turn the top layer to the left."), including back-layer moves. Arrows and instructions are checked against the cube model by tests. |
 | **Training-data collection** | Every sticker keeps its reading: colour, confidence, the best three colours, and whether the detector was unsure. Confirmed scans are saved as 54 labelled 32×32 sticker crops (`ml/data/`), balanced by design and with corrected stickers marked as hard examples. |
+| **Trained colour classifier** | A small CNN (PyTorch, about 24,000 parameters) trained on those crops with augmentation, tested on whole held-out scans against the HSV detector, and exported to ONNX. The app runs it with OpenCV's DNN module (no PyTorch at runtime) and uses it only if it was at least as accurate as HSV on the test scans. |
+| **Vision check** | When a broken scan has several valid fixes, the repair agent can call `look_at_stickers`: Gemini compares the camera crops of the doubtful stickers with the six centres (same light, known colours). Only crops are sent, the answer is schema-checked, and the fix still comes from the proven search. |
 
 ---
 
@@ -288,7 +290,8 @@ backend/
                        0003 lesson embeddings)
   vision/
     camera.py          threaded capture, FPS, device enumeration
-    detector.py        the HSV segmentation pipeline
+    detector.py        the HSV segmentation pipeline (or the trained CNN on the crops)
+    classifier.py      the trained colour CNN: ONNX model run with OpenCV, auto/hsv/cnn modes
     overlay.py         the OpenCV HUD (drawn procedurally, never blitted PNGs)
   ipc/
     protocol.py        length-prefixed framing
@@ -311,6 +314,8 @@ frontend/src/
   pages/               the twelve screens
 
 ml/data/               sticker colour dataset (see ml/data/README.md)
+ml/train.py            trains the colour CNN, tests it against HSV, exports ONNX
+ml/models/             the trained model (sticker_cnn.onnx) + its test results (sticker_cnn.json)
 
 .github/workflows/
   ci.yml               CI: tests (SQLite + Postgres), verify.py, AI evaluation, live checks, builds
@@ -354,10 +359,10 @@ python -m pip install -r requirements-dev.txt   # app + pytest + Socket.IO clien
 
 pytest                          # unit tests (about 40 s: scanning tests run the real detector)
 pytest -m "not slow"            # skip the solver tests
-python tools/verify.py          # end-to-end pipeline check (17 offline checks)
+python tools/verify.py          # end-to-end pipeline check (18 offline checks)
 python tools/verify.py --live   # + 11 checks against a running app (python run.py --headless)
 python tools/eval_ai.py         # AI evaluation, offline (about 15 s): docs/eval/offline.md
-python tools/eval_ai.py --live  # + the real Gemini model (key in .env; about 100 requests, 13 min)
+python tools/eval_ai.py --live  # + the real Gemini model (key in .env; about 125 requests, 16 min)
 ```
 
 The unit tests live in `tests/`. They never touch your real `data/` folder or a real database:
@@ -414,10 +419,23 @@ and the Docker build. It needs no secrets.
 **AI evaluation.** `python tools/eval_ai.py` measures the AI features without a key and fails if a
 gate fails: RAG retrieval (recall@1, recall@3, MRR on 15 labelled questions), the repair search on
 simulated misreads (including the rare ambiguous ones), the beginner method on 100 random cubes,
-12 guardrail cases (misbehaving model answers code must catch) and the built-in answers. With
+14 guardrail cases (misbehaving model answers code must catch) and the built-in answers. With
 `--live` it also measures the real model: retrieval with real embeddings, the coach's citations
-and refusals, the repair agent against the built-in search, and the tutor's hints. Reports:
-`docs/eval/offline.md` and `docs/eval/live.md`.
+and refusals, the repair agent against the built-in search (also with the vision check), and the
+tutor's hints. Reports: `docs/eval/offline.md` and `docs/eval/live.md`.
+
+**Colour classifier.** Train it on your saved scans (at least 3; 10+ in different lights is
+better):
+
+```bash
+python -m pip install -r requirements-ml.txt   # PyTorch + ONNX, for training only
+python ml/train.py                             # about a minute on a laptop CPU
+```
+
+It splits the scans into train and test by whole scan, trains the CNN with augmentation, compares
+it with the HSV detector on the test scans, exports `ml/models/sticker_cnn.onnx`, checks that
+OpenCV gives the same answers as PyTorch, and writes `docs/eval/classifier.md`. Restart the app:
+the Scanner shows which colour model is active. `CUBE_COLOR_MODEL=hsv` or `cnn` forces one.
 
 Regenerate art and screenshots:
 
@@ -547,6 +565,8 @@ win over it.
 | `CUBE_DATA_DIR` | `./data` | `./data` |
 | `CUBE_DATASET_ENABLED` | on | off |
 | `CUBE_DATASET_DIR` | `./ml/data` | `./ml/data` |
+| `CUBE_COLOR_MODEL` | `auto`: the trained CNN if it was at least as accurate as HSV | `auto` (the image has no model, so HSV) |
+| `CUBE_MODEL_DIR` | `./ml/models` | same |
 | `GEMINI_API_KEY` | not set: AI off, built-in answers | optional secret (Render dashboard) |
 | `GEMINI_MODEL` | `gemini-3.5-flash-lite` | same |
 | `GEMINI_THINKING_LEVEL` | not set: the model's default | same |
