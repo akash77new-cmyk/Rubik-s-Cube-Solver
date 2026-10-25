@@ -1,0 +1,1815 @@
+{
+  "schema": 1,
+  "id": "20261024-170429-615612",
+  "createdAt": "2026-10-24T17:04:29Z",
+  "lighting": "glare",
+  "profile": "default",
+  "colorModel": "hsv",
+  "camera": {
+    "index": 0,
+    "resolution": null,
+    "mirror": true
+  },
+  "detector": {
+    "spacing": 96,
+    "sampleRadius": 10,
+    "cropSize": 32
+  },
+  "centers": {
+    "U": "W",
+    "R": "R",
+    "F": "G",
+    "D": "Y",
+    "L": "O",
+    "B": "B"
+  },
+  "counts": {
+    "stickers": 54,
+    "corrected": 0,
+    "uncertain": 0
+  },
+  "stickers": [
+    {
+      "file": "U0.png",
+      "face": "U",
+      "index": 0,
+      "label": "B",
+      "predicted": "B",
+      "hsvPredicted": "B",
+      "corrected": false,
+      "confidence": 0.805,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.805,
+          "inRange": true
+        },
+        {
+          "color": "W",
+          "confidence": 0.225,
+          "inRange": false
+        },
+        {
+          "color": "G",
+          "confidence": 0.187,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        107,
+        108,
+        122
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U1.png",
+      "face": "U",
+      "index": 1,
+      "label": "W",
+      "predicted": "W",
+      "hsvPredicted": "W",
+      "corrected": false,
+      "confidence": 0.679,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.679,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.17,
+          "inRange": false
+        },
+        {
+          "color": "B",
+          "confidence": 0.161,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        0,
+        15,
+        151
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U2.png",
+      "face": "U",
+      "index": 2,
+      "label": "G",
+      "predicted": "G",
+      "hsvPredicted": "G",
+      "corrected": false,
+      "confidence": 0.875,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.875,
+          "inRange": true
+        },
+        {
+          "color": "W",
+          "confidence": 0.228,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.195,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        68,
+        114,
+        145
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U3.png",
+      "face": "U",
+      "index": 3,
+      "label": "O",
+      "predicted": "O",
+      "hsvPredicted": "O",
+      "corrected": false,
+      "confidence": 0.842,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.842,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.373,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.322,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        8,
+        163,
+        174
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U4.png",
+      "face": "U",
+      "index": 4,
+      "label": "W",
+      "predicted": "W",
+      "hsvPredicted": "W",
+      "corrected": false,
+      "confidence": 0.652,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.652,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.162,
+          "inRange": false
+        },
+        {
+          "color": "B",
+          "confidence": 0.154,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        158,
+        7,
+        140
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U5.png",
+      "face": "U",
+      "index": 5,
+      "label": "W",
+      "predicted": "W",
+      "hsvPredicted": "W",
+      "corrected": false,
+      "confidence": 0.737,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.737,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.163,
+          "inRange": false
+        },
+        {
+          "color": "B",
+          "confidence": 0.155,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        120,
+        7,
+        149
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U6.png",
+      "face": "U",
+      "index": 6,
+      "label": "B",
+      "predicted": "B",
+      "hsvPredicted": "B",
+      "corrected": false,
+      "confidence": 0.894,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.894,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.194,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.174,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        109,
+        152,
+        119
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U7.png",
+      "face": "U",
+      "index": 7,
+      "label": "R",
+      "predicted": "R",
+      "hsvPredicted": "R",
+      "corrected": false,
+      "confidence": 0.894,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.894,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.313,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.24,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        178,
+        171,
+        133
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U8.png",
+      "face": "U",
+      "index": 8,
+      "label": "W",
+      "predicted": "W",
+      "hsvPredicted": "W",
+      "corrected": false,
+      "confidence": 0.726,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.726,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.167,
+          "inRange": false
+        },
+        {
+          "color": "B",
+          "confidence": 0.162,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        139,
+        14,
+        144
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R0.png",
+      "face": "R",
+      "index": 0,
+      "label": "B",
+      "predicted": "B",
+      "hsvPredicted": "B",
+      "corrected": false,
+      "confidence": 0.831,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.831,
+          "inRange": true
+        },
+        {
+          "color": "W",
+          "confidence": 0.235,
+          "inRange": false
+        },
+        {
+          "color": "G",
+          "confidence": 0.198,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        106,
+        113,
+        138
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R1.png",
+      "face": "R",
+      "index": 1,
+      "label": "B",
+      "predicted": "B",
+      "hsvPredicted": "B",
+      "corrected": false,
+      "confidence": 0.845,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.845,
+          "inRange": true
+        },
+        {
+          "color": "W",
+          "confidence": 0.23,
+          "inRange": false
+        },
+        {
+          "color": "G",
+          "confidence": 0.196,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        107,
+        116,
+        139
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R2.png",
+      "face": "R",
+      "index": 2,
+      "label": "Y",
+      "predicted": "Y",
+      "hsvPredicted": "Y",
+      "corrected": false,
+      "confidence": 0.813,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.813,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.269,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.227,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        25,
+        114,
+        190
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R3.png",
+      "face": "R",
+      "index": 3,
+      "label": "W",
+      "predicted": "W",
+      "hsvPredicted": "W",
+      "corrected": false,
+      "confidence": 0.695,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.695,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.159,
+          "inRange": false
+        },
+        {
+          "color": "B",
+          "confidence": 0.151,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        135,
+        3,
+        150
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R4.png",
+      "face": "R",
+      "index": 4,
+      "label": "R",
+      "predicted": "R",
+      "hsvPredicted": "R",
+      "corrected": false,
+      "confidence": 0.88,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.88,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.376,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.278,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        1,
+        173,
+        164
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R5.png",
+      "face": "R",
+      "index": 5,
+      "label": "Y",
+      "predicted": "Y",
+      "hsvPredicted": "Y",
+      "corrected": false,
+      "confidence": 0.845,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.845,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.331,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.259,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        24,
+        149,
+        198
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R6.png",
+      "face": "R",
+      "index": 6,
+      "label": "Y",
+      "predicted": "Y",
+      "hsvPredicted": "Y",
+      "corrected": false,
+      "confidence": 0.813,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.813,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.283,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.24,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        26,
+        125,
+        168
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R7.png",
+      "face": "R",
+      "index": 7,
+      "label": "B",
+      "predicted": "B",
+      "hsvPredicted": "B",
+      "corrected": false,
+      "confidence": 0.943,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.943,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.203,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.162,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        108,
+        172,
+        132
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R8.png",
+      "face": "R",
+      "index": 8,
+      "label": "G",
+      "predicted": "G",
+      "hsvPredicted": "G",
+      "corrected": false,
+      "confidence": 0.909,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.909,
+          "inRange": true
+        },
+        {
+          "color": "W",
+          "confidence": 0.218,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.218,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        63,
+        116,
+        157
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F0.png",
+      "face": "F",
+      "index": 0,
+      "label": "W",
+      "predicted": "W",
+      "hsvPredicted": "W",
+      "corrected": false,
+      "confidence": 0.779,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.779,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.162,
+          "inRange": false
+        },
+        {
+          "color": "B",
+          "confidence": 0.153,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        83,
+        5,
+        154
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F1.png",
+      "face": "F",
+      "index": 1,
+      "label": "G",
+      "predicted": "G",
+      "hsvPredicted": "G",
+      "corrected": false,
+      "confidence": 0.868,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.868,
+          "inRange": true
+        },
+        {
+          "color": "W",
+          "confidence": 0.236,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.192,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        67,
+        105,
+        146
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F2.png",
+      "face": "F",
+      "index": 2,
+      "label": "R",
+      "predicted": "R",
+      "hsvPredicted": "R",
+      "corrected": false,
+      "confidence": 0.898,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.898,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.327,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.251,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        178,
+        161,
+        149
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F3.png",
+      "face": "F",
+      "index": 3,
+      "label": "B",
+      "predicted": "B",
+      "hsvPredicted": "B",
+      "corrected": false,
+      "confidence": 0.908,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.908,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.205,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.166,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        107,
+        164,
+        123
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F4.png",
+      "face": "F",
+      "index": 4,
+      "label": "G",
+      "predicted": "G",
+      "hsvPredicted": "G",
+      "corrected": false,
+      "confidence": 0.917,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.917,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.22,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.199,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        71,
+        155,
+        140
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F5.png",
+      "face": "F",
+      "index": 5,
+      "label": "G",
+      "predicted": "G",
+      "hsvPredicted": "G",
+      "corrected": false,
+      "confidence": 0.917,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.917,
+          "inRange": true
+        },
+        {
+          "color": "Y",
+          "confidence": 0.21,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.205,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        67,
+        133,
+        148
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F6.png",
+      "face": "F",
+      "index": 6,
+      "label": "W",
+      "predicted": "W",
+      "hsvPredicted": "W",
+      "corrected": false,
+      "confidence": 0.785,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.785,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.173,
+          "inRange": false
+        },
+        {
+          "color": "B",
+          "confidence": 0.169,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        123,
+        19,
+        148
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F7.png",
+      "face": "F",
+      "index": 7,
+      "label": "B",
+      "predicted": "B",
+      "hsvPredicted": "B",
+      "corrected": false,
+      "confidence": 0.931,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.931,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.2,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.175,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        109,
+        159,
+        135
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F8.png",
+      "face": "F",
+      "index": 8,
+      "label": "O",
+      "predicted": "O",
+      "hsvPredicted": "O",
+      "corrected": false,
+      "confidence": 0.829,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.829,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.355,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.319,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        7,
+        173,
+        199
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D0.png",
+      "face": "D",
+      "index": 0,
+      "label": "G",
+      "predicted": "G",
+      "hsvPredicted": "G",
+      "corrected": false,
+      "confidence": 0.848,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.848,
+          "inRange": true
+        },
+        {
+          "color": "W",
+          "confidence": 0.228,
+          "inRange": false
+        },
+        {
+          "color": "B",
+          "confidence": 0.186,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        68,
+        107,
+        135
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D1.png",
+      "face": "D",
+      "index": 1,
+      "label": "Y",
+      "predicted": "Y",
+      "hsvPredicted": "Y",
+      "corrected": false,
+      "confidence": 0.775,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.775,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.244,
+          "inRange": false
+        },
+        {
+          "color": "G",
+          "confidence": 0.23,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        30,
+        114,
+        145
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D2.png",
+      "face": "D",
+      "index": 2,
+      "label": "B",
+      "predicted": "B",
+      "hsvPredicted": "B",
+      "corrected": false,
+      "confidence": 0.844,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.844,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.197,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.195,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        107,
+        133,
+        118
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D3.png",
+      "face": "D",
+      "index": 3,
+      "label": "W",
+      "predicted": "W",
+      "hsvPredicted": "W",
+      "corrected": false,
+      "confidence": 0.575,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.575,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.156,
+          "inRange": false
+        },
+        {
+          "color": "B",
+          "confidence": 0.148,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        0,
+        2,
+        132
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D4.png",
+      "face": "D",
+      "index": 4,
+      "label": "Y",
+      "predicted": "Y",
+      "hsvPredicted": "Y",
+      "corrected": false,
+      "confidence": 0.786,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.786,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.301,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.259,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        25,
+        141,
+        150
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D5.png",
+      "face": "D",
+      "index": 5,
+      "label": "R",
+      "predicted": "R",
+      "hsvPredicted": "R",
+      "corrected": false,
+      "confidence": 0.834,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.834,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.315,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.249,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        0,
+        162,
+        135
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D6.png",
+      "face": "D",
+      "index": 6,
+      "label": "R",
+      "predicted": "R",
+      "hsvPredicted": "R",
+      "corrected": false,
+      "confidence": 0.8,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.8,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.296,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.242,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        0,
+        148,
+        133
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D7.png",
+      "face": "D",
+      "index": 7,
+      "label": "Y",
+      "predicted": "Y",
+      "hsvPredicted": "Y",
+      "corrected": false,
+      "confidence": 0.788,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.788,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.302,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.26,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        25,
+        142,
+        150
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D8.png",
+      "face": "D",
+      "index": 8,
+      "label": "O",
+      "predicted": "O",
+      "hsvPredicted": "O",
+      "corrected": false,
+      "confidence": 0.91,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.91,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.388,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.329,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        9,
+        184,
+        173
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L0.png",
+      "face": "L",
+      "index": 0,
+      "label": "Y",
+      "predicted": "Y",
+      "hsvPredicted": "Y",
+      "corrected": false,
+      "confidence": 0.787,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.787,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.227,
+          "inRange": false
+        },
+        {
+          "color": "G",
+          "confidence": 0.211,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        29,
+        95,
+        159
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L1.png",
+      "face": "L",
+      "index": 1,
+      "label": "G",
+      "predicted": "G",
+      "hsvPredicted": "G",
+      "corrected": false,
+      "confidence": 0.868,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.868,
+          "inRange": true
+        },
+        {
+          "color": "W",
+          "confidence": 0.238,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.197,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        63,
+        94,
+        150
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L2.png",
+      "face": "L",
+      "index": 2,
+      "label": "O",
+      "predicted": "O",
+      "hsvPredicted": "O",
+      "corrected": false,
+      "confidence": 0.79,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.79,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.323,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.311,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        8,
+        145,
+        195
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L3.png",
+      "face": "L",
+      "index": 3,
+      "label": "Y",
+      "predicted": "Y",
+      "hsvPredicted": "Y",
+      "corrected": false,
+      "confidence": 0.822,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.822,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.271,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.232,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        28,
+        124,
+        158
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L4.png",
+      "face": "L",
+      "index": 4,
+      "label": "O",
+      "predicted": "O",
+      "hsvPredicted": "O",
+      "corrected": false,
+      "confidence": 0.953,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.953,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.36,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.335,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        10,
+        192,
+        190
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L5.png",
+      "face": "L",
+      "index": 5,
+      "label": "O",
+      "predicted": "O",
+      "hsvPredicted": "O",
+      "corrected": false,
+      "confidence": 0.903,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.903,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.348,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.327,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        9,
+        189,
+        201
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L6.png",
+      "face": "L",
+      "index": 6,
+      "label": "W",
+      "predicted": "W",
+      "hsvPredicted": "W",
+      "corrected": false,
+      "confidence": 0.691,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.691,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.163,
+          "inRange": false
+        },
+        {
+          "color": "B",
+          "confidence": 0.155,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        143,
+        7,
+        146
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L7.png",
+      "face": "L",
+      "index": 7,
+      "label": "R",
+      "predicted": "R",
+      "hsvPredicted": "R",
+      "corrected": false,
+      "confidence": 0.915,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.915,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.37,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.268,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        0,
+        182,
+        157
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L8.png",
+      "face": "L",
+      "index": 8,
+      "label": "O",
+      "predicted": "O",
+      "hsvPredicted": "O",
+      "corrected": false,
+      "confidence": 0.901,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.901,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.349,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.328,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        9,
+        187,
+        200
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B0.png",
+      "face": "B",
+      "index": 0,
+      "label": "R",
+      "predicted": "R",
+      "hsvPredicted": "R",
+      "corrected": false,
+      "confidence": 0.772,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.772,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.275,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.239,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        0,
+        120,
+        154
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B1.png",
+      "face": "B",
+      "index": 1,
+      "label": "O",
+      "predicted": "O",
+      "hsvPredicted": "O",
+      "corrected": false,
+      "confidence": 0.79,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.79,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.322,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.313,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        8,
+        150,
+        201
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B2.png",
+      "face": "B",
+      "index": 2,
+      "label": "R",
+      "predicted": "R",
+      "hsvPredicted": "R",
+      "corrected": false,
+      "confidence": 0.851,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.851,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.304,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.249,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        178,
+        135,
+        169
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B3.png",
+      "face": "B",
+      "index": 3,
+      "label": "O",
+      "predicted": "O",
+      "hsvPredicted": "O",
+      "corrected": false,
+      "confidence": 0.891,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.891,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.359,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.334,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        9,
+        177,
+        193
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B4.png",
+      "face": "B",
+      "index": 4,
+      "label": "B",
+      "predicted": "B",
+      "hsvPredicted": "B",
+      "corrected": false,
+      "confidence": 0.924,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.924,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.187,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.171,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        112,
+        156,
+        129
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B5.png",
+      "face": "B",
+      "index": 5,
+      "label": "G",
+      "predicted": "G",
+      "hsvPredicted": "G",
+      "corrected": false,
+      "confidence": 0.92,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.92,
+          "inRange": true
+        },
+        {
+          "color": "Y",
+          "confidence": 0.219,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.214,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        65,
+        126,
+        161
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B6.png",
+      "face": "B",
+      "index": 6,
+      "label": "Y",
+      "predicted": "Y",
+      "hsvPredicted": "Y",
+      "corrected": false,
+      "confidence": 0.831,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.831,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.304,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.253,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        26,
+        138,
+        165
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B7.png",
+      "face": "B",
+      "index": 7,
+      "label": "R",
+      "predicted": "R",
+      "hsvPredicted": "R",
+      "corrected": false,
+      "confidence": 0.885,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.885,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.37,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.272,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        1,
+        180,
+        155
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B8.png",
+      "face": "B",
+      "index": 8,
+      "label": "G",
+      "predicted": "G",
+      "hsvPredicted": "G",
+      "corrected": false,
+      "confidence": 0.939,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.939,
+          "inRange": true
+        },
+        {
+          "color": "Y",
+          "confidence": 0.22,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.202,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        66,
+        137,
+        156
+      ],
+      "uncertain": null
+    }
+  ]
+}

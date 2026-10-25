@@ -1,0 +1,1763 @@
+{
+  "schema": 1,
+  "id": "20261021-170554-1f1383",
+  "createdAt": "2026-10-21T17:05:54Z",
+  "lighting": "daylight",
+  "profile": "default",
+  "camera": {
+    "index": 0,
+    "resolution": [
+      960,
+      540
+    ],
+    "mirror": true
+  },
+  "detector": {
+    "spacing": 96,
+    "sampleRadius": 10,
+    "cropSize": 32
+  },
+  "centers": {
+    "U": "W",
+    "R": "R",
+    "F": "G",
+    "D": "Y",
+    "L": "O",
+    "B": "B"
+  },
+  "counts": {
+    "stickers": 54,
+    "corrected": 0,
+    "uncertain": 0
+  },
+  "stickers": [
+    {
+      "file": "U0.png",
+      "face": "U",
+      "index": 0,
+      "label": "O",
+      "predicted": "O",
+      "corrected": false,
+      "confidence": 0.822,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.822,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.353,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.319,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        7,
+        169,
+        198
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U1.png",
+      "face": "U",
+      "index": 1,
+      "label": "W",
+      "predicted": "W",
+      "corrected": false,
+      "confidence": 0.79,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.79,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.173,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.167,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        161,
+        29,
+        158
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U2.png",
+      "face": "U",
+      "index": 2,
+      "label": "R",
+      "predicted": "R",
+      "corrected": false,
+      "confidence": 0.89,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.89,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.321,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.248,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        178,
+        161,
+        144
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U3.png",
+      "face": "U",
+      "index": 3,
+      "label": "B",
+      "predicted": "B",
+      "corrected": false,
+      "confidence": 0.979,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.979,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.193,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.163,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        111,
+        171,
+        143
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U4.png",
+      "face": "U",
+      "index": 4,
+      "label": "W",
+      "predicted": "W",
+      "corrected": false,
+      "confidence": 0.867,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.867,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.187,
+          "inRange": false
+        },
+        {
+          "color": "G",
+          "confidence": 0.175,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        129,
+        35,
+        166
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U5.png",
+      "face": "U",
+      "index": 5,
+      "label": "G",
+      "predicted": "G",
+      "corrected": false,
+      "confidence": 0.914,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.914,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.213,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.203,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        70,
+        143,
+        147
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U6.png",
+      "face": "U",
+      "index": 6,
+      "label": "O",
+      "predicted": "O",
+      "corrected": false,
+      "confidence": 0.809,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.809,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.333,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.312,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        7,
+        175,
+        211
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U7.png",
+      "face": "U",
+      "index": 7,
+      "label": "W",
+      "predicted": "W",
+      "corrected": false,
+      "confidence": 0.856,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.856,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.192,
+          "inRange": false
+        },
+        {
+          "color": "G",
+          "confidence": 0.167,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        133,
+        42,
+        178
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "U8.png",
+      "face": "U",
+      "index": 8,
+      "label": "R",
+      "predicted": "R",
+      "corrected": false,
+      "confidence": 0.95,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.95,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.357,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.26,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        178,
+        177,
+        159
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R0.png",
+      "face": "R",
+      "index": 0,
+      "label": "B",
+      "predicted": "B",
+      "corrected": false,
+      "confidence": 0.958,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.958,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.205,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.164,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        108,
+        174,
+        143
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R1.png",
+      "face": "R",
+      "index": 1,
+      "label": "R",
+      "predicted": "R",
+      "corrected": false,
+      "confidence": 0.887,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.887,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.322,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.251,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        178,
+        154,
+        152
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R2.png",
+      "face": "R",
+      "index": 2,
+      "label": "B",
+      "predicted": "B",
+      "corrected": false,
+      "confidence": 0.957,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.957,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.202,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.179,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        109,
+        161,
+        150
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R3.png",
+      "face": "R",
+      "index": 3,
+      "label": "B",
+      "predicted": "B",
+      "corrected": false,
+      "confidence": 0.922,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.922,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.194,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.137,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        109,
+        204,
+        159
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R4.png",
+      "face": "R",
+      "index": 4,
+      "label": "R",
+      "predicted": "R",
+      "corrected": false,
+      "confidence": 0.978,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.978,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.369,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.257,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        177,
+        192,
+        170
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R5.png",
+      "face": "R",
+      "index": 5,
+      "label": "B",
+      "predicted": "B",
+      "corrected": false,
+      "confidence": 0.915,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.915,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.193,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.137,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        109,
+        205,
+        163
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R6.png",
+      "face": "R",
+      "index": 6,
+      "label": "B",
+      "predicted": "B",
+      "corrected": false,
+      "confidence": 0.868,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.868,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.19,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.13,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        108,
+        215,
+        177
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R7.png",
+      "face": "R",
+      "index": 7,
+      "label": "R",
+      "predicted": "R",
+      "corrected": false,
+      "confidence": 0.936,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.936,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.355,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.248,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        175,
+        191,
+        171
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "R8.png",
+      "face": "R",
+      "index": 8,
+      "label": "B",
+      "predicted": "B",
+      "corrected": false,
+      "confidence": 0.926,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.926,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.187,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.145,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        111,
+        196,
+        176
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F0.png",
+      "face": "F",
+      "index": 0,
+      "label": "W",
+      "predicted": "W",
+      "corrected": false,
+      "confidence": 0.766,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.766,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.171,
+          "inRange": false
+        },
+        {
+          "color": "G",
+          "confidence": 0.166,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        156,
+        25,
+        152
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F1.png",
+      "face": "F",
+      "index": 1,
+      "label": "R",
+      "predicted": "R",
+      "corrected": false,
+      "confidence": 0.846,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.846,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.329,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.263,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        0,
+        148,
+        161
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F2.png",
+      "face": "F",
+      "index": 2,
+      "label": "Y",
+      "predicted": "Y",
+      "corrected": false,
+      "confidence": 0.797,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.797,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.275,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.236,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        26,
+        121,
+        164
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F3.png",
+      "face": "F",
+      "index": 3,
+      "label": "W",
+      "predicted": "W",
+      "corrected": false,
+      "confidence": 0.871,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.871,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.186,
+          "inRange": false
+        },
+        {
+          "color": "G",
+          "confidence": 0.175,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        128,
+        34,
+        165
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F4.png",
+      "face": "F",
+      "index": 4,
+      "label": "G",
+      "predicted": "G",
+      "corrected": false,
+      "confidence": 0.922,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.922,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.208,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.208,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        69,
+        139,
+        153
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F5.png",
+      "face": "F",
+      "index": 5,
+      "label": "Y",
+      "predicted": "Y",
+      "corrected": false,
+      "confidence": 0.847,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.847,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.291,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.242,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        27,
+        131,
+        171
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F6.png",
+      "face": "F",
+      "index": 6,
+      "label": "W",
+      "predicted": "W",
+      "corrected": false,
+      "confidence": 0.886,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.886,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.191,
+          "inRange": false
+        },
+        {
+          "color": "G",
+          "confidence": 0.171,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        127,
+        42,
+        187
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F7.png",
+      "face": "F",
+      "index": 7,
+      "label": "R",
+      "predicted": "R",
+      "corrected": false,
+      "confidence": 0.857,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.857,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.316,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.248,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        176,
+        145,
+        179
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "F8.png",
+      "face": "F",
+      "index": 8,
+      "label": "Y",
+      "predicted": "Y",
+      "corrected": false,
+      "confidence": 0.797,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.797,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.253,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.217,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        25,
+        104,
+        189
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D0.png",
+      "face": "D",
+      "index": 0,
+      "label": "R",
+      "predicted": "R",
+      "corrected": false,
+      "confidence": 0.837,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.837,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.323,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.256,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        0,
+        155,
+        146
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D1.png",
+      "face": "D",
+      "index": 1,
+      "label": "Y",
+      "predicted": "Y",
+      "corrected": false,
+      "confidence": 0.781,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.781,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.311,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.264,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        23,
+        136,
+        167
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D2.png",
+      "face": "D",
+      "index": 2,
+      "label": "O",
+      "predicted": "O",
+      "corrected": false,
+      "confidence": 0.839,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.839,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.37,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.319,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        7,
+        165,
+        185
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D3.png",
+      "face": "D",
+      "index": 3,
+      "label": "G",
+      "predicted": "G",
+      "corrected": false,
+      "confidence": 0.923,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.923,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.209,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.208,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        69,
+        143,
+        149
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D4.png",
+      "face": "D",
+      "index": 4,
+      "label": "Y",
+      "predicted": "Y",
+      "corrected": false,
+      "confidence": 0.836,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.836,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.302,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.251,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        26,
+        136,
+        169
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D5.png",
+      "face": "D",
+      "index": 5,
+      "label": "B",
+      "predicted": "B",
+      "corrected": false,
+      "confidence": 0.955,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.955,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.191,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.151,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        111,
+        181,
+        135
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D6.png",
+      "face": "D",
+      "index": 6,
+      "label": "R",
+      "predicted": "R",
+      "corrected": false,
+      "confidence": 0.915,
+      "alternatives": [
+        {
+          "color": "R",
+          "confidence": 0.915,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.379,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.273,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        0,
+        180,
+        165
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D7.png",
+      "face": "D",
+      "index": 7,
+      "label": "Y",
+      "predicted": "Y",
+      "corrected": false,
+      "confidence": 0.819,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.819,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.295,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.246,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        24,
+        127,
+        184
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "D8.png",
+      "face": "D",
+      "index": 8,
+      "label": "O",
+      "predicted": "O",
+      "corrected": false,
+      "confidence": 0.798,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.798,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.353,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.311,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        6,
+        170,
+        201
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L0.png",
+      "face": "L",
+      "index": 0,
+      "label": "G",
+      "predicted": "G",
+      "corrected": false,
+      "confidence": 0.913,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.913,
+          "inRange": true
+        },
+        {
+          "color": "W",
+          "confidence": 0.214,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.209,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        67,
+        127,
+        152
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L1.png",
+      "face": "L",
+      "index": 1,
+      "label": "O",
+      "predicted": "O",
+      "corrected": false,
+      "confidence": 0.863,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.863,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.365,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.327,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        8,
+        170,
+        189
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L2.png",
+      "face": "L",
+      "index": 2,
+      "label": "G",
+      "predicted": "G",
+      "corrected": false,
+      "confidence": 0.883,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.883,
+          "inRange": true
+        },
+        {
+          "color": "W",
+          "confidence": 0.228,
+          "inRange": false
+        },
+        {
+          "color": "B",
+          "confidence": 0.203,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        70,
+        121,
+        151
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L3.png",
+      "face": "L",
+      "index": 3,
+      "label": "G",
+      "predicted": "G",
+      "corrected": false,
+      "confidence": 0.924,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.924,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.216,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.212,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        70,
+        151,
+        165
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L4.png",
+      "face": "L",
+      "index": 4,
+      "label": "O",
+      "predicted": "O",
+      "corrected": false,
+      "confidence": 0.886,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.886,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.336,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.324,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        9,
+        187,
+        207
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L5.png",
+      "face": "L",
+      "index": 5,
+      "label": "G",
+      "predicted": "G",
+      "corrected": false,
+      "confidence": 0.935,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.935,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.217,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.212,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        70,
+        155,
+        162
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L6.png",
+      "face": "L",
+      "index": 6,
+      "label": "G",
+      "predicted": "G",
+      "corrected": false,
+      "confidence": 0.905,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.905,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.223,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.208,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        72,
+        158,
+        177
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L7.png",
+      "face": "L",
+      "index": 7,
+      "label": "O",
+      "predicted": "O",
+      "corrected": false,
+      "confidence": 0.836,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.836,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.32,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.311,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        8,
+        183,
+        217
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "L8.png",
+      "face": "L",
+      "index": 8,
+      "label": "G",
+      "predicted": "G",
+      "corrected": false,
+      "confidence": 0.896,
+      "alternatives": [
+        {
+          "color": "G",
+          "confidence": 0.896,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.216,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.209,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        71,
+        143,
+        171
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B0.png",
+      "face": "B",
+      "index": 0,
+      "label": "W",
+      "predicted": "W",
+      "corrected": false,
+      "confidence": 0.779,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.779,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.17,
+          "inRange": false
+        },
+        {
+          "color": "B",
+          "confidence": 0.167,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        139,
+        18,
+        159
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B1.png",
+      "face": "B",
+      "index": 1,
+      "label": "O",
+      "predicted": "O",
+      "corrected": false,
+      "confidence": 0.819,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.819,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.345,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.316,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        7,
+        173,
+        204
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B2.png",
+      "face": "B",
+      "index": 2,
+      "label": "Y",
+      "predicted": "Y",
+      "corrected": false,
+      "confidence": 0.795,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.795,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.282,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.241,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        25,
+        122,
+        170
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B3.png",
+      "face": "B",
+      "index": 3,
+      "label": "W",
+      "predicted": "W",
+      "corrected": false,
+      "confidence": 0.911,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.911,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.183,
+          "inRange": false
+        },
+        {
+          "color": "G",
+          "confidence": 0.175,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        125,
+        33,
+        178
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B4.png",
+      "face": "B",
+      "index": 4,
+      "label": "B",
+      "predicted": "B",
+      "corrected": false,
+      "confidence": 0.987,
+      "alternatives": [
+        {
+          "color": "B",
+          "confidence": 0.987,
+          "inRange": true
+        },
+        {
+          "color": "G",
+          "confidence": 0.19,
+          "inRange": false
+        },
+        {
+          "color": "W",
+          "confidence": 0.163,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        112,
+        173,
+        152
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B5.png",
+      "face": "B",
+      "index": 5,
+      "label": "Y",
+      "predicted": "Y",
+      "corrected": false,
+      "confidence": 0.855,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.855,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.291,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.24,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        27,
+        130,
+        175
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B6.png",
+      "face": "B",
+      "index": 6,
+      "label": "W",
+      "predicted": "W",
+      "corrected": false,
+      "confidence": 0.906,
+      "alternatives": [
+        {
+          "color": "W",
+          "confidence": 0.906,
+          "inRange": true
+        },
+        {
+          "color": "B",
+          "confidence": 0.185,
+          "inRange": false
+        },
+        {
+          "color": "G",
+          "confidence": 0.169,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        129,
+        38,
+        191
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B7.png",
+      "face": "B",
+      "index": 7,
+      "label": "O",
+      "predicted": "O",
+      "corrected": false,
+      "confidence": 0.758,
+      "alternatives": [
+        {
+          "color": "O",
+          "confidence": 0.758,
+          "inRange": true
+        },
+        {
+          "color": "R",
+          "confidence": 0.306,
+          "inRange": false
+        },
+        {
+          "color": "Y",
+          "confidence": 0.292,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        6,
+        175,
+        226
+      ],
+      "uncertain": null
+    },
+    {
+      "file": "B8.png",
+      "face": "B",
+      "index": 8,
+      "label": "Y",
+      "predicted": "Y",
+      "corrected": false,
+      "confidence": 0.833,
+      "alternatives": [
+        {
+          "color": "Y",
+          "confidence": 0.833,
+          "inRange": true
+        },
+        {
+          "color": "O",
+          "confidence": 0.285,
+          "inRange": false
+        },
+        {
+          "color": "R",
+          "confidence": 0.237,
+          "inRange": false
+        }
+      ],
+      "hsv": [
+        25,
+        123,
+        189
+      ],
+      "uncertain": null
+    }
+  ]
+}
