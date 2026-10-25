@@ -436,6 +436,39 @@ def run_offline() -> None:
             assert not wrong, f"wrong labels: {wrong}"
         return "6 synthetic faces scanned by the real detector -> 54 PNGs, all labels correct"
 
+    @check("accounts · hashed passwords, signed tokens, and one session per visitor")
+    def _() -> str:
+        from backend.core.solver import SolverEngine
+        from backend.server.auth import issue_token, read_token
+        from backend.services.accounts import AccountStore
+        from backend.services.logbus import LogBus
+        from backend.services.sessions import SessionManager, SharedServices, Visitor, build_session
+
+        stores = memory_stores()
+        database = stores["database"]
+        accounts = AccountStore(database)
+        account = accounts.create("verify@example.com", "a-long-password")
+        assert accounts.authenticate("VERIFY@example.com", "a-long-password") == account, "login failed"
+        assert accounts.authenticate("verify@example.com", "a-wrong-password") is None, "a wrong password passed"
+        token = issue_token("secret", {"kind": "user", "id": account.id, "email": account.email})
+        assert read_token("secret", token)["id"] == account.id, "the token did not round-trip"
+        assert read_token("other-secret", token) is None, "a token signed with another key was accepted"
+
+        shared = SharedServices(
+            settings=stores["settings"], profiles=stores["profiles"], solver=SolverEngine(), logs=LogBus(),
+            accounts=accounts, database=database, local_analytics=stores["analytics"],
+            publish=lambda event, data, to=None: None, publish_frame=lambda jpeg: None, production=True,
+        )
+        sessions = SessionManager(lambda visitor, guard: build_session(visitor, guard, shared))
+        mine = sessions.get(Visitor(f"u:{account.id}", account.email))
+        guest = sessions.get(Visitor("g:0123456789abcdef"))
+        mine.handle_command("cube.scramble", {"length": 15})
+        assert guest.snapshot()["cube"] is None, "a guest saw another visitor's cube"
+        guest.handle_command("settings.update", {"theme": "light"})
+        assert shared.settings.current.theme == "dark", "a live-site guest changed the shared settings"
+        sessions.shutdown()
+        return "scrypt hash + login; JWT signed and checked; 2 visitors, 2 cubes; a guest changes nothing shared"
+
     @check("colour model · the trained CNN or HSV; the vision check picks the fix the images show")
     def _() -> str:
         import json
@@ -742,6 +775,60 @@ def run_live(url: str, expect_db: str | None = None, expect_ai: str | None = Non
         pause = f" (waited {waited} s for the AI budget)" if waited > 2 else ""
         return (f"{how}{pause}: \"{hint['text'][:50]}...\"; followed {len(moves)} shown move(s), "
                 f"now at stage {stage}")
+
+    @check("live · accounts: sign up, a session of its own, log out, delete")
+    def _() -> str:
+        import json
+        import secrets
+        import urllib.error
+        import urllib.request
+
+        # The login cookie, kept by hand: a browser sends a "Secure" cookie only over HTTPS,
+        # but this check must also work against a local production-mode run (plain HTTP).
+        token = {"cookie": ""}
+
+        def remember(headers) -> None:
+            for header in headers.get_all("Set-Cookie") or []:
+                if header.startswith("cube_token="):
+                    token["cookie"] = header.split(";", 1)[0]
+
+        def call(path: str, body: dict | None = None) -> tuple:
+            data = json.dumps(body).encode() if body is not None else None
+            headers = {"Content-Type": "application/json"}
+            if token["cookie"]:
+                headers["Cookie"] = token["cookie"]
+            request = urllib.request.Request(url.rstrip("/") + path, data=data, headers=headers,
+                                             method="POST" if body is not None else "GET")
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    remember(response.headers)
+                    return response.status, json.loads(response.read())
+            except urllib.error.HTTPError as exc:
+                remember(exc.headers)
+                return exc.code, json.loads(exc.read() or b"{}")
+
+        email, password = f"verify-{secrets.token_hex(4)}@example.com", secrets.token_urlsafe(12)
+        status, me = call("/api/auth/signup", {"email": email, "password": password})
+        assert status == 201 and me["email"] == email, f"sign-up failed: {status} {me}"
+        try:
+            assert call("/api/auth/me")[1].get("email") == email, "the cookie did not log the browser in"
+            mine: dict = {}
+            account = socketio.Client()
+            account.on("state", lambda data: mine.update(data))
+            account.connect(url, headers={"Cookie": token["cookie"]}, wait_timeout=15)
+            assert wait_for(lambda: bool(mine), timeout=10), "the account's socket got no state"
+            before = (state.get("cube") or {}).get("facelets")
+            account.emit("command", {"command": "cube.scramble", "payload": {"length": 15}})
+            assert wait_for(lambda: mine.get("cubeSource") == "scramble"), "the account's scramble did not arrive"
+            time.sleep(0.5)
+            assert (state.get("cube") or {}).get("facelets") == before, "another visitor's cube changed"
+            account.disconnect()
+            assert call("/api/auth/logout", {})[1] == {"kind": "guest"}, "log-out failed"
+            assert call("/api/auth/login", {"email": email, "password": password})[0] == 200, "log-in failed"
+        finally:  # never leave test accounts behind on the live site
+            status, _ = call("/api/auth/delete", {"password": password})
+        assert status == 200, f"could not delete the test account ({status})"
+        return "signed up, own cube (this session's unchanged), logged out and in, account deleted"
 
     @check("live · engine streams structured logs")
     def _() -> str:
