@@ -5,6 +5,10 @@
  * Every page reads from this store and every user action goes out as a single
  * `command` event, so the engine stays the single source of truth and the UI
  * never holds a divergent copy of the cube.
+ *
+ * Phase 9: before connecting, the store asks the server who this browser is (a guest
+ * or an account). The socket's handshake then carries the login cookie, so the server
+ * puts this browser in its own session: other visitors never see this cube.
  */
 
 import {
@@ -18,6 +22,7 @@ import {
   type ReactNode,
 } from "react";
 import { io, type Socket } from "socket.io-client";
+import { fetchAccount, type Account } from "@/lib/account";
 import type {
   AIAnswer,
   AIProgress,
@@ -70,6 +75,8 @@ interface AppStoreValue {
   ai: { answer: AIAnswer | null; progress: AIProgress | null; traces: AITrace[] };
   /** The lessons and the coach's latest answer (Phase 7). */
   learn: { lessons: Lesson[]; answer: CoachAnswer | null };
+  /** Who this browser is (Phase 9): null until the server has answered. */
+  account: Account | null;
 }
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
@@ -85,6 +92,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [aiTraces, setAiTraces] = useState<AITrace[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [coachAnswer, setCoachAnswer] = useState<CoachAnswer | null>(null);
+  const [account, setAccount] = useState<Account | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const toastId = useRef(1);
 
@@ -103,7 +111,21 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // ------------------------------------------------------------------
   // Socket wiring
   // ------------------------------------------------------------------
+  // First: who is this browser? (A new browser gets a guest token cookie here.)
   useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      fetchAccount()
+        .then((who) => !cancelled && setAccount(who))
+        .catch(() => !cancelled && window.setTimeout(load, 1500)); // the server may still be starting
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (account === null) return; // connect only once the token cookie is in place
     const socket = io({ transports: ["websocket", "polling"], reconnectionDelay: 800 });
     socketRef.current = socket;
     // Exposed so tooling (tools/screenshots.mjs) and manual debugging can drive
@@ -213,7 +235,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       socket.close();
       socketRef.current = null;
     };
-  }, [pushToast]);
+  }, [pushToast, account]);
 
   // Keep the document theme in sync with the persisted setting.
   useEffect(() => {
@@ -259,10 +281,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       clearLogs,
       ai: { answer: aiAnswer, progress: aiProgress, traces: aiTraces },
       learn: { lessons, answer: coachAnswer },
+      account,
     }),
     [
       connection, snapshot, detection, logs, toasts, send, pushToast, dismissToast, clearLogs,
-      aiAnswer, aiProgress, aiTraces, lessons, coachAnswer,
+      aiAnswer, aiProgress, aiTraces, lessons, coachAnswer, account,
     ],
   );
 

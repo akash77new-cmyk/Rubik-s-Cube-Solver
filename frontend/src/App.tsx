@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { BrandCell, Header, Sidebar, type PageId } from "@/components/layout";
 import { useApp } from "@/state/AppStore";
 import { AboutDialog } from "@/components/AboutDialog";
+import { AccountDialog } from "@/components/AccountDialog";
 import { Toasts } from "@/components/Toasts";
 import DashboardPage from "@/pages/DashboardPage";
 import CameraPage from "@/pages/CameraPage";
@@ -42,6 +43,7 @@ export default function App() {
   const [page, setPage] = useState<PageId>(pageFromHash);
   const [collapsed, setCollapsed] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const { snapshot, send } = useApp();
 
   /* Hash routing keeps deep links working without pulling in a router. */
@@ -101,7 +103,12 @@ export default function App() {
     <div className="app" data-collapsed={collapsed}>
       <div className="ambient" aria-hidden="true" />
       <BrandCell onToggleSidebar={() => setCollapsed((value) => !value)} />
-      <Header page={page} onAbout={() => setAboutOpen(true)} onSettings={() => navigate("settings")} />
+      <Header
+        page={page}
+        onAbout={() => setAboutOpen(true)}
+        onSettings={() => navigate("settings")}
+        onAccount={() => setAccountOpen(true)}
+      />
       <Sidebar page={page} onNavigate={navigate} />
       <main className="main">
         <div key={page} className="page fade-in">
@@ -110,6 +117,7 @@ export default function App() {
       </main>
       <Toasts />
       {aboutOpen && <AboutDialog onClose={() => setAboutOpen(false)} />}
+      {accountOpen && <AccountDialog onClose={() => setAccountOpen(false)} />}
     </div>
   );
 }

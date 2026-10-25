@@ -21,6 +21,7 @@ import {
   IconSparkle,
   IconSun,
   IconTerminal,
+  IconUser,
 } from "@/components/Icons";
 
 export type PageId =
@@ -122,16 +123,18 @@ export function Header({
   page,
   onAbout,
   onSettings,
+  onAccount,
 }: {
   page: PageId;
   onAbout: () => void;
   onSettings: () => void;
+  onAccount: () => void;
 }) {
   /** Header button cycles through the three themes in one control. */
   const nextTheme = (current: ThemeName): ThemeName =>
     current === "dark" ? "midnight" : current === "midnight" ? "light" : "dark";
 
-  const { connection, snapshot, detection } = useApp();
+  const { connection, snapshot, detection, account } = useApp();
   const meta = PAGE_META[page];
   const camera = snapshot?.camera;
   const solver = snapshot?.solver;
@@ -188,6 +191,16 @@ export function Header({
           optional
           title={solver?.message}
         />
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<IconUser size={16} />}
+          aria-label="Account"
+          title={account?.kind === "user" ? `Logged in as ${account.email}` : "Log in or sign up"}
+          onClick={onAccount}
+        >
+          <span className="account-chip">{account?.kind === "user" ? account.email : "Log in"}</span>
+        </Button>
         <Button
           variant="ghost"
           size="sm"

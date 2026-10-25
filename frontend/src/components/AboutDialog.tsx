@@ -56,6 +56,11 @@ const CAPABILITIES: { title: string; detail: string }[] = [
       "Lessons embedded with Gemini and stored in PostgreSQL with pgvector; the coach answers only from the sections it retrieved, and every citation is checked.",
   },
   {
+    title: "Accounts & sessions",
+    detail:
+      "Every visitor gets their own session through per-visitor Socket.IO rooms. Accounts use scrypt-hashed passwords and a signed JWT in an HttpOnly cookie, and keep their settings and solve history.",
+  },
+  {
     title: "Solve & Learn",
     detail:
       "The beginner method on your own cube, in seven stages: code finds every step and its moves, an AI tutor gives hints and answers why, and any moves it writes must come from the app.",
