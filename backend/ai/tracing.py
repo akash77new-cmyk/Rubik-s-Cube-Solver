@@ -7,7 +7,8 @@ from the model or from the built-in fallback.
 
 ``Trace`` collects the steps of one run in memory. ``TraceStore`` saves finished
 traces (tables ``ai_runs`` and ``ai_steps``), keeps only the newest 200 runs, and
-reads them back for the AI page.
+reads them back for the AI page. Each run records its ``owner`` (Phase 9), and the AI
+page of one visitor lists only that visitor's runs: questions are private.
 """
 
 from __future__ import annotations
@@ -26,10 +27,14 @@ from backend.db.models import AIRunRow, AIStepRow
 class Trace:
     """The steps of one AI run, in order."""
 
-    def __init__(self, run_id: str, feature: str, question: str, clock: Callable[[], float] = time.time) -> None:
+    def __init__(
+        self, run_id: str, feature: str, question: str, clock: Callable[[], float] = time.time,
+        owner: Optional[str] = None,
+    ) -> None:
         self.run_id = run_id
         self.feature = feature
         self.question = question
+        self.owner = owner  # "u:<id>", "g:<id>" or "local" (Phase 9)
         self._clock = clock
         self.started_at = clock()
         self.steps: List[Dict[str, Any]] = []
@@ -130,6 +135,7 @@ class TraceStore:
                     output_tokens=trace.output_tokens,
                     started_at=_utc(trace.started_at),
                     duration_ms=trace.duration_ms,
+                    owner=trace.owner,
                 )
             )
             for step in trace.steps:
@@ -154,11 +160,16 @@ class TraceStore:
                 session.execute(delete(AIStepRow).where(AIStepRow.run_id.in_(old)))
                 session.execute(delete(AIRunRow).where(AIRunRow.id.in_(old)))
 
-    def recent(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """The newest runs with their steps, newest first, ready for the UI."""
+    def recent(self, limit: int = 20, owner: Optional[str] = None) -> List[Dict[str, Any]]:
+        """The newest runs with their steps, newest first, ready for the UI.
+
+        With ``owner``, only that visitor's runs (the AI page); without, everyone's (tools)."""
+        query = select(AIRunRow)
+        if owner is not None:
+            query = query.where(AIRunRow.owner == owner)
         with self._db.transaction("load AI traces") as session:
             runs = session.scalars(
-                select(AIRunRow).order_by(AIRunRow.started_at.desc(), AIRunRow.id.desc()).limit(limit)
+                query.order_by(AIRunRow.started_at.desc(), AIRunRow.id.desc()).limit(limit)
             ).all()
             ids = [run.id for run in runs]
             steps = session.scalars(

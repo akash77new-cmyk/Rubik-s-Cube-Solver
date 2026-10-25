@@ -3,6 +3,10 @@
 History is stored in the database (table ``solves``). Like settings, it is read
 from memory and written to the database first: ``summary()`` runs for every state
 snapshot, so it must never wait for the network.
+
+Since Phase 9 each store holds one owner's history: an account's (``user_id``), or the
+solves made without an account (``user_id`` None: locally, the laptop's owner). With no
+database at all, the history lives in memory only: a guest's visit on the live site.
 """
 
 from __future__ import annotations
@@ -11,7 +15,7 @@ import threading
 import time
 from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import delete, select
 
@@ -48,11 +52,11 @@ class SolveRecord:
 _TIME_FIELDS = ("started_at", "finished_at")
 
 
-def row_from_record(record: SolveRecord) -> SolveRow:
+def row_from_record(record: SolveRecord, user_id: Optional[int] = None) -> SolveRow:
     values = asdict(record)
     for name in _TIME_FIELDS:
         values[name] = datetime.fromtimestamp(values[name], tz=timezone.utc)
-    return SolveRow(**values)
+    return SolveRow(**values, user_id=user_id)
 
 
 def record_from_row(row: SolveRow) -> SolveRecord:
@@ -65,8 +69,9 @@ def record_from_row(row: SolveRow) -> SolveRecord:
 class AnalyticsStore:
     """Solve history (memory + database) with derived session/lifetime statistics."""
 
-    def __init__(self, database: Database) -> None:
-        self._db = database
+    def __init__(self, database: Optional[Database], user_id: Optional[int] = None) -> None:
+        self._db = database  # None = memory only (a guest's visit)
+        self.user_id = user_id
         self._lock = threading.RLock()       # guards the memory copy
         self._write_lock = threading.Lock()  # one database write at a time
         self._records: List[SolveRecord] = self._load()
@@ -75,17 +80,26 @@ class AnalyticsStore:
         self._detection_samples: List[float] = []
 
     # ------------------------------------------------------------------
+    def _owned(self, query: Any) -> Any:
+        """Only this store's owner: its account, or the solves made without an account."""
+        if self.user_id is None:
+            return query.where(SolveRow.user_id.is_(None))
+        return query.where(SolveRow.user_id == self.user_id)
+
     def _load(self) -> List[SolveRecord]:
+        if self._db is None:
+            return []
         with self._db.transaction("load solve history") as session:
-            rows = session.scalars(select(SolveRow).order_by(SolveRow.finished_at, SolveRow.id))
+            rows = session.scalars(self._owned(select(SolveRow)).order_by(SolveRow.finished_at, SolveRow.id))
             return [record_from_row(row) for row in rows]
 
     # ------------------------------------------------------------------
     def record(self, record: SolveRecord) -> SolveRecord:
         """Save one solve. Raises StorageError if the database refuses it."""
         with self._write_lock:
-            with self._db.transaction("save the solve to history") as session:
-                session.add(row_from_record(record))
+            if self._db is not None:
+                with self._db.transaction("save the solve to history") as session:
+                    session.add(row_from_record(record, self.user_id))
             with self._lock:
                 self._records.append(record)
                 self._session_ids.add(record.id)
@@ -168,8 +182,9 @@ class AnalyticsStore:
         history" would report a session length with no solves behind it.
         """
         with self._write_lock:
-            with self._db.transaction("clear solve history") as session:
-                session.execute(delete(SolveRow))
+            if self._db is not None:
+                with self._db.transaction("clear solve history") as session:
+                    session.execute(self._owned(delete(SolveRow)))
             with self._lock:
                 self._records.clear()
                 self._session_ids.clear()

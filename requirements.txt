@@ -36,3 +36,6 @@ psycopg[binary]>=3.2            # PostgreSQL driver; binary wheels, so no compil
 
 # --- Configuration ---------------------------------------------------------
 python-dotenv>=1.0              # loads a local .env file into environment variables
+
+# --- Accounts (Phase 9) -----------------------------------------------------
+PyJWT>=2.8                      # signed login tokens (JWT); passwords use Werkzeug's scrypt hashing

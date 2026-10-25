@@ -23,7 +23,7 @@ NEON = (
     "postgresql://neondb_owner:s3cret@ep-cool-name-a1b2c3.ap-southeast-1.aws.neon.tech/neondb"
     "?sslmode=require&channel_binding=require"
 )
-APP_TABLES = {"app_settings", "color_profiles", "solves", "ai_runs", "ai_steps", "lesson_embeddings"}
+APP_TABLES = {"app_settings", "color_profiles", "solves", "ai_runs", "ai_steps", "lesson_embeddings", "users"}
 
 
 # ----------------------------------------------------------------------------
@@ -51,7 +51,7 @@ def test_check_reports_version_and_schema(open_db):
     database = open_db()
     status = database.status()
     assert status["connected"] is True and status["error"] is None
-    assert status["schemaRevision"] == head_revision() == "0003"
+    assert status["schemaRevision"] == head_revision() == "0004"
     assert status["serverVersion"]
     if database.dialect == "sqlite":
         assert status["pgvector"] is None
@@ -133,7 +133,8 @@ def test_models_match_the_migrations(open_db):
 
 def test_solve_table_matches_solve_record():
     columns = {column.name for column in SolveRow.__table__.columns}
-    assert columns == set(SolveRecord.__dataclass_fields__)
+    # user_id (Phase 9) says whose solve it is; the record shown in the UI doesn't need it.
+    assert columns == set(SolveRecord.__dataclass_fields__) | {"user_id"}
 
 
 def test_upgrade_twice_is_harmless_and_downgrade_undoes_everything(open_db):

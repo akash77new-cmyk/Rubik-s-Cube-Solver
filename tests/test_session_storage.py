@@ -38,7 +38,7 @@ def test_snapshot_reports_the_database(session):
     database = session.snapshot()["database"]
     assert database["backend"] == "SQLite"
     assert database["connected"] is True
-    assert database["schemaRevision"] == "0003"
+    assert database["schemaRevision"] == "0004"
 
 
 def test_check_connection_command(session):

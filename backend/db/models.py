@@ -1,13 +1,14 @@
 """Database tables, as SQLAlchemy ORM classes.
 
-Phase 3's three tables replaced the JSON files used before; Phases 4 and 7 added three:
+Phase 3's three tables replaced the JSON files used before; Phases 4, 7 and 9 added four:
 
 ========================  =====================================================
-``app_settings``          the Settings page (one row, all settings as JSON)
+``app_settings``          the installation's settings (one row, all settings as JSON)
 ``color_profiles``        HSV profiles saved on the Calibration page
-``solves``                solve history behind the Analytics page
+``solves``                solve history behind the Analytics page (per account, Phase 9)
 ``ai_runs``, ``ai_steps``  traces of AI runs (Phase 4): see backend/ai/tracing.py
 ``lesson_embeddings``     the RAG coach's lesson embeddings (Phase 7): see backend/ai/retrieval.py
+``users``                 accounts (Phase 9): see backend/services/accounts.py
 ========================  =====================================================
 
 Built-in HSV presets stay in code (``backend/core/color.py``): they are part of the
@@ -154,8 +155,23 @@ class ColorProfileRow(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
 
+class UserRow(Base):
+    """One account (Phase 9). The password is never stored: only its salted scrypt hash."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True)  # always lower-case
+    password_hash: Mapped[str] = mapped_column(String(255))
+    #: This account's own settings (theme, palette, camera...), or None = the defaults.
+    settings: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(UTCDateTime, nullable=True)
+
+
 class SolveRow(Base):
-    """One completed solve. Columns match ``SolveRecord`` in services/analytics.py."""
+    """One completed solve. Columns match ``SolveRecord`` in services/analytics.py, plus
+    ``user_id``: the account it belongs to (None = solves made without an account)."""
 
     __tablename__ = "solves"
 
@@ -174,6 +190,9 @@ class SolveRow(Base):
     turn_distribution: Mapped[Dict[str, int]] = mapped_column(JSON)
     detection_confidence: Mapped[float] = mapped_column(Float)
     source: Mapped[str] = mapped_column(String(16))
+    user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
 
 class AIRunRow(Base):
@@ -194,6 +213,9 @@ class AIRunRow(Base):
     #: Indexed: the AI page lists the newest runs first.
     started_at: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
     duration_ms: Mapped[int] = mapped_column(Integer)
+    #: Whose run it was (Phase 9): "u:<account id>", "g:<guest id>" or "local". Each
+    #: visitor's AI page lists only their own runs.
+    owner: Mapped[Optional[str]] = mapped_column(String(40), nullable=True, index=True)
 
 
 class AIStepRow(Base):
