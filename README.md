@@ -38,13 +38,14 @@ rotation arrows drawn over the live feed, and an analytics dashboard tracking ev
 | **Kociemba two-phase solver** | Pluggable backend: the native C extension when installed, otherwise Kociemba's own pure-Python implementation. Solutions are ≤ 20 moves, found in single-digit milliseconds. |
 | **Socket-based IPC** | The vision engine runs as its **own OS process** and publishes state and JPEG frames over a length-prefixed TCP protocol. The web server is a pure relay. |
 | **Real-time synchronisation** | One Socket.IO connection mirrors the engine snapshot into React. Every page reads the same state; every action is a single command going the other way. |
+| **Accounts & multi-user sessions** | Every visitor gets their own session (their own cube, scan, solution, Solve & Learn progress and AI answers), routed through per-visitor Socket.IO rooms. Sign-up and login with scrypt-hashed passwords and a signed JWT in an HttpOnly, SameSite cookie; accounts keep their settings and solve history on every device; guests need no sign-up. Wrong-password limits, idle sessions closed, one camera shared safely. |
 | **Analytics** | Solve history in PostgreSQL: move counts, search times, execution times, move distribution and running average sticker confidence. |
 | **Database** | PostgreSQL (Neon) in production, SQLite locally, through SQLAlchemy. Alembic migrations run automatically at start-up. Reads are served from memory, so the camera loop never waits for the network; writes go to the database first. |
 | **AI assistant** | A tool-calling agent on Google Gemini answers questions about your cube, your solution and your solves. Every fact comes from five read-only tools computed by the app, the answer must pass a JSON-schema check, and every model request and tool call is traced in the database. A request budget protects the free quota, and without AI the same tools give a built-in answer. |
 | **Guided scanning** | Colour-only step guide; faces identified by their centre colour (no duplicates, any order); mirrored previews un-mirrored; orientation mistakes repaired by a smallest-change search that only applies unique fixes. |
 | **RAG coach** | Eight short lessons, split into 37 sections and embedded with Gemini; the embeddings live in PostgreSQL with pgvector, and a question finds the nearest sections by cosine distance (NumPy locally, BM25 keywords without embeddings). The coach answers only from those sections and must cite them: every citation is checked against what the search returned. |
 | **Solve & Learn** | Learn the beginner method on your own cube: scan once, then solve it in seven stages, tapping each move you make so the app always knows your cube. Code finds every step and its exact moves (tested on random cubes); an AI tutor gives hints in three levels and answers "why?" from the lessons, and any move sequence it writes must come from the app. |
-| **CI/CD and AI evaluation** | GitHub Actions runs every push: the unit tests on SQLite and on PostgreSQL with pgvector, the pipeline check, all 29 live checks against the running app (with a fake Gemini), the frontend build and the Docker build. Render deploys only after they pass. An evaluation suite measures the AI features (retrieval recall and MRR, repair accuracy, guardrails, fallbacks, and with a key the real model's citations and hints) and writes reports to `docs/eval/`. |
+| **CI/CD and AI evaluation** | GitHub Actions runs every push: the unit tests on SQLite and on PostgreSQL with pgvector, the pipeline check, all 31 live checks against the running app (with a fake Gemini), the frontend build and the Docker build. Render deploys only after they pass. An evaluation suite measures the AI features (retrieval recall and MRR, repair accuracy, guardrails, fallbacks, and with a key the real model's citations and hints) and writes reports to `docs/eval/`. |
 | **Smart repair** | When a scan is unsolvable, a search finds every 1- or 2-sticker change that makes the cube valid (the validator decides), ranked by how unsure the camera was. A Gemini agent reads the problems, the doubtful stickers and these proven fixes, then picks one by its id or asks for a rescan, and explains why. Nothing changes until the user presses Apply; without AI the search's best fix is proposed. |
 | **Plain-English moves** | A "hold the cube like this" step comes first; then every move says which way to turn, seen from where you are ("Turn the top layer to the left."), including back-layer moves. Arrows and instructions are checked against the cube model by tests. |
 | **Training-data collection** | Every sticker keeps its reading: colour, confidence, the best three colours, and whether the detector was unsure. Confirmed scans are saved as 54 labelled 32×32 sticker crops (`ml/data/`), balanced by design and with corrected stickers marked as hard examples. |
@@ -233,7 +234,8 @@ accents become the only light in the frame, which is what lets the glow read as 
                     ┌──────────────▼───────────────┐
                     │  Web server      (process 2) │
                     │  backend/server/app.py       │
-                    │   • Socket.IO relay          │
+                    │   • Socket.IO relay (rooms)  │
+                    │   • /api/auth (JWT cookies)  │
                     │   • /api/stream.mjpg         │
                     │   • serves frontend/dist     │
                     └──────────────┬───────────────┘
@@ -248,6 +250,12 @@ The engine is the **single source of truth**. The web server holds no cube state
 browser commands down the socket and engine events back up. A blocking OpenCV capture loop can
 therefore never stall an HTTP request, and the same engine could feed a native client or a
 second machine unchanged.
+
+**Many visitors (Phase 9).** The web server checks each visitor's token and tags every command
+with their session key (`u:<account id>` or `g:<guest id>`); the engine keeps one `SolveSession`
+per key and addresses its events back to that key, which the server delivers to that visitor's
+Socket.IO room only. Accounts are checked in the engine, next to the database; tokens are made
+and checked at the web server, where requests come in.
 
 ### Layout
 
@@ -284,10 +292,10 @@ backend/
   db/
     database.py        engine, transactions, connection status (no secrets shown)
     models.py          the tables: app_settings, color_profiles, solves, ai_runs, ai_steps,
-                       lesson_embeddings (a pgvector column on Postgres)
+                       lesson_embeddings (a pgvector column on Postgres), users
     migrate.py         runs Alembic migrations at start-up, retries while Neon wakes
     migrations/        Alembic: env.py + versions/ (0001 initial schema, 0002 AI traces,
-                       0003 lesson embeddings)
+                       0003 lesson embeddings, 0004 accounts)
   vision/
     camera.py          threaded capture, FPS, device enumeration
     detector.py        the HSV segmentation pipeline (or the trained CNN on the crops)
@@ -298,7 +306,9 @@ backend/
     server.py          engine-side TCP server + broadcast
     client.py          web-server-side client with auto-reconnect
   services/
-    session.py         the state machine every UI page mirrors
+    session.py         the state machine every UI page mirrors (one per visitor)
+    sessions.py        one session per visitor: the manager, the shared camera, idle cleanup
+    accounts.py        accounts: sign-up, login (scrypt hashes), deletion, per-account settings
     learn.py           Solve & Learn: the learner's cube, stages, hints and guided moves
     settings.py        settings store (memory copy, written through to the database)
     profiles.py        HSV profile store: built-in presets + user profiles
@@ -306,7 +316,8 @@ backend/
     legacy_import.py   one-time import of the pre-Phase-3 JSON files
     dataset.py         training-data collection (scans → labelled crops)
     logbus.py          structured ring-buffer log stream
-  server/app.py        Flask + Socket.IO + MJPEG
+  server/app.py        Flask + Socket.IO + MJPEG, the /api/auth endpoints, per-visitor rooms
+  server/auth.py       login tokens (JWT in an HttpOnly cookie) and the wrong-password limiter
 
 frontend/src/
   state/AppStore.tsx   one socket → React state, one command channel back
@@ -359,8 +370,8 @@ python -m pip install -r requirements-dev.txt   # app + pytest + Socket.IO clien
 
 pytest                          # unit tests (about 40 s: scanning tests run the real detector)
 pytest -m "not slow"            # skip the solver tests
-python tools/verify.py          # end-to-end pipeline check (18 offline checks)
-python tools/verify.py --live   # + 11 checks against a running app (python run.py --headless)
+python tools/verify.py          # end-to-end pipeline check (19 offline checks)
+python tools/verify.py --live   # + 12 checks against a running app (python run.py --headless)
 python tools/eval_ai.py         # AI evaluation, offline (about 15 s): docs/eval/offline.md
 python tools/eval_ai.py --live  # + the real Gemini model (key in .env; about 125 requests, 16 min)
 ```
@@ -556,7 +567,7 @@ win over it.
 | Variable | Development default | Production |
 |---|---|---|
 | `APP_ENV` | `development` | `production` (set in the Dockerfile) |
-| `FLASK_SECRET_KEY` | insecure dev key | required (Render generates it) |
+| `FLASK_SECRET_KEY` | insecure dev key | required (Render generates it); also signs login tokens, so changing it logs everyone out |
 | `CUBE_WEB_HOST` | `127.0.0.1` | `0.0.0.0` |
 | `CUBE_WEB_PORT` | `$PORT`, else `8000` | Render sets `PORT` |
 | `CUBE_ENGINE_HOST` / `CUBE_ENGINE_PORT` | `127.0.0.1` / `9999` | same |

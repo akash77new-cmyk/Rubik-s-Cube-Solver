@@ -46,7 +46,9 @@ web server   (process 2)   backend/server/app.py     Flask + Flask-SocketIO, a p
    │  TCP 127.0.0.1:9999, length-prefixed frames ('J' = JSON, 'F' = JPEG)
    ▼
 vision engine (process 1)  backend/engine.py         single source of truth
+   • SessionManager   backend/services/sessions.py  one SolveSession per visitor, the shared camera (Phase 9)
    • SolveSession     backend/services/session.py   state machine: scan → solve → playback
+   • AccountStore     backend/services/accounts.py  accounts: scrypt hashes, per-account settings (Phase 9)
    • CameraStream     backend/vision/camera.py      threaded webcam capture
    • FaceDetector     backend/vision/detector.py    HSV sampling, confidence, stability
    • StickerClassifier backend/vision/classifier.py the trained colour CNN (ONNX via OpenCV, Phase 11)
@@ -97,6 +99,28 @@ database   Neon PostgreSQL in production · SQLite file data/cube.db locally (DA
   `public_error()` show only the database name and the host, with Neon's endpoint id hidden
   (the live site is public). Tests never use `.env`'s `DATABASE_URL`; Postgres tests need
   `CUBE_TEST_POSTGRES_URL` pointing at a throwaway server (never Neon).
+
+### 3b. Accounts and sessions (Phase 9)
+- **Identity is decided at the web server**, from the token cookie (`backend/server/auth.py`): a
+  signed JWT (HS256, key derived from `FLASK_SECRET_KEY`), HttpOnly, SameSite=Lax, Secure in
+  production. Every relayed command carries `session` ("u:<id>", "g:<guest id>", "s:<sid>" for a
+  socket with no token, "local" for REST) and `user`; never trust a session key from the browser.
+- `auth.*`, `subscribe` and `touch` are internal engine commands (the `/api/auth/*` endpoints send
+  `auth.*` with `EngineClient.request()`); a browser or `/api/command` sending them is refused.
+- The engine keeps one `SolveSession` per key (`SessionManager`); a session's events go out with
+  `to=<key>` and the server emits them to that Socket.IO room. Logs, the solver's status and
+  `ai:status` from the lessons sync go to everyone.
+- What a session gets (`build_session`): an account → `AccountSettings` + its own `AnalyticsStore`;
+  a guest locally → the installation's settings and history (one person, one laptop); a guest in
+  production → `MemorySettings` + a memory-only history, and it can't save shared colour profiles.
+- Shared on purpose: the solver, lessons, logs, colour profiles, the AI budget, and the camera
+  (`CameraGuard`: one owner at a time; only the owner's browser may open `/api/stream.mjpg`).
+- AI calls pass `owner` and the session's `publish`; traces store `owner`, and `ai.traces` lists
+  only the visitor's own runs. "One question at a time" is per owner.
+- A session closes 30 minutes after its last command; the server sends `touch` every 5 minutes
+  for visitors with a tab open. At most 100 sessions are kept (least recently used first).
+- Password rules: 8-128 characters; `AccountStore.authenticate` checks a dummy hash for unknown
+  emails (same timing). 5 wrong passwords per email in 15 minutes → HTTP 429.
 
 ### Cube conventions
 - Faces in order `U R F D L B`. Each face stores 9 stickers in reading order; index 4 is the centre.
@@ -231,7 +255,8 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 - One gunicorn worker with threads: Socket.IO state lives in memory, so never add workers.
 - Production solver: `kociemba` (C) from `requirements-prod.txt`. The pure-Python fallback needs
   large tables; don't rely on it in production.
-- **Until Phase 9 the live site has one shared session for every visitor** (Solve & Learn too).
+- **Every visitor has their own session** (Phase 9); a guest's session on the live site lasts for
+  their visit only. Changing `FLASK_SECRET_KEY` logs everyone out (it signs the tokens).
 - **Deploys:** Render deploys a push to `main` only after every CI job passes
   (`autoDeployTrigger: checksPass`). `/api/health` shows the live commit as `version`.
 - **Security:** in production Socket.IO accepts only the app's own origin (unless
@@ -290,7 +315,7 @@ These rules are enforced by code and tests since Phase 4 (`backend/ai/`, see 4a)
 | 6 | Beginner (layer-by-layer) solver + solution stages | ✅ (built in Phase 8) |
 | 7 | Lessons + RAG Coach (pgvector, cited answers) | ✅ |
 | 8 | Solve & Learn + AI Tutor (beginner method, hints, checked moves) | ✅ |
-| 9 | Accounts + multi-user sessions | ⬜ |
+| 9 | Accounts + multi-user sessions | ✅ |
 | 10 | Browser camera | ⬜ |
 | 11 | Trained colour classifier + vision-LLM fallback | ✅ |
 | 12 | Launch: CI/CD, AI evaluation suite, security pass, docs | ✅ |
