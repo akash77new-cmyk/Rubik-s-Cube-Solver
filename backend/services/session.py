@@ -94,7 +94,18 @@ class SolveSession:
         ai: Optional[AIService] = None,
         classifier: Optional[StickerClassifier] = None,
         color_model: Optional[Dict[str, Any]] = None,
+        owner: str = "local",
+        camera_guard: Optional[Any] = None,
+        can_save_shared: bool = True,
+        solver_events: bool = True,
     ) -> None:
+        #: Whose session this is (Phase 9): "u:<account id>", "g:<guest id>" or "local".
+        self.owner = owner
+        #: Shares the one physical camera between sessions (SessionManager); None = no sharing.
+        self._camera_guard = camera_guard
+        #: May this visitor change data everyone shares (saved colour profiles)? Not a guest
+        #: on the live site.
+        self._can_save_shared = can_save_shared
         self._settings = settings
         self._profiles = profiles
         self._solver = solver
@@ -185,7 +196,8 @@ class SolveSession:
         self._last_calibration_emit = 0.0
         self._last_telemetry_emit = 0.0
 
-        solver.add_listener(lambda status: self._publish_event("solver", status))
+        if solver_events:  # with many sessions, the engine sends the solver's status once, to everyone
+            solver.add_listener(lambda status: self._publish_event("solver", status))
 
     # ==================================================================
     # Lifecycle
@@ -206,6 +218,11 @@ class SolveSession:
         if self._loop_thread and self._loop_thread.is_alive():
             self._loop_thread.join(timeout=2.0)
         self.camera.stop()
+        self._release_camera()
+
+    def _release_camera(self) -> None:
+        if self._camera_guard is not None:
+            self._camera_guard.release(self.owner)
 
     # ==================================================================
     # Frame loop
@@ -595,7 +612,7 @@ class SolveSession:
             self._repair = {"status": "working", "cube": cube.to_color_string()}
         self._logs.info("The cube is not solvable: looking for misread stickers", source="repair")
         if self._ai is not None:
-            self._ai.repair_async(context, self._on_repair)
+            self._ai.repair_async(context, self._on_repair, owner=self.owner)
         else:  # no AI service at all (tools, some tests): the built-in search answers at once
             self._on_repair(context.proposal(fallback_answer(context, None), "search", None, None))
 
@@ -644,6 +661,7 @@ class SolveSession:
         """A valid cube needs no more camera frames, so the camera turns off (saves CPU)."""
         if self.camera.is_running:
             self.camera.stop()
+            self._release_camera()
             self._logs.info("The cube is valid, so the camera was turned off", source="camera")
 
     def _reorient_face(self, face: str, index_map: Sequence[int]) -> None:
@@ -987,7 +1005,7 @@ class SolveSession:
             return
         with self._lock:
             learn.tutor_busy = True
-        result = self._ai.tutor_async(context, done)
+        result = self._ai.tutor_async(context, done, owner=self.owner, publish=self._publish_event)
         if not result["ok"]:
             with self._lock:
                 learn.tutor_busy = False
@@ -1260,6 +1278,8 @@ class SolveSession:
             )
             self._logs.info(f"Loaded HSV preset '{name}'", source="calibration")
         elif action == "save":
+            if not self._can_save_shared:
+                return {"ok": False, "error": "Log in to save colour profiles: everyone on this site shares them."}
             profile = self._ensure_draft()
             name = str(payload.get("name") or "custom").strip() or "custom"
             profile.name = name
@@ -1275,6 +1295,8 @@ class SolveSession:
             self.detector.configure(profile=profile)
             self._logs.info("Applied calibration to the live detector", source="calibration")
         elif action == "delete":
+            if not self._can_save_shared:
+                return {"ok": False, "error": "Log in to delete colour profiles: everyone on this site shares them."}
             name = str(payload.get("name", ""))
             try:
                 self._profiles.delete(name)
@@ -1303,6 +1325,9 @@ class SolveSession:
     # Camera / settings
     # ==================================================================
     def start_camera(self) -> Dict[str, Any]:
+        if self._camera_guard is not None and not self._camera_guard.claim(self.owner):
+            # One physical camera: another visitor's session is using it (Phase 9).
+            return {"ok": False, "error": "The camera is in use by another session."}
         config = self._settings.current
         ok = self.camera.restart(
             index=config.camera_index,
@@ -1312,12 +1337,14 @@ class SolveSession:
             mirror=config.mirror_camera,
         )
         if ok:
+            self.start()  # the frame loop runs only in a session whose camera is on
             self._logs.success(
                 f"Camera {config.camera_index} started at "
                 f"{config.frame_width}x{config.frame_height}",
                 source="camera",
             )
         else:
+            self._release_camera()
             self._logs.error(
                 self.camera.status().get("error") or "Camera failed to start",
                 source="camera",
@@ -1327,6 +1354,7 @@ class SolveSession:
 
     def stop_camera(self) -> Dict[str, Any]:
         self.camera.stop()
+        self._release_camera()
         self._logs.info("Camera stopped", source="camera")
         self._broadcast_state()
         return {"ok": True, "camera": self.camera.status()}
@@ -1443,7 +1471,7 @@ class SolveSession:
             "dataset": self.dataset_state(),
             "colorModel": self._color_model,
             "database": self._database.status() if self._database is not None else None,
-            "ai": self._ai.status() if self._ai is not None else None,
+            "ai": self._ai.status(self.owner) if self._ai is not None else None,
             "repair": self.repair_state(),
             "learn": self._learn.to_dict() if self._learn is not None else None,
             "timestamp": time.time(),
@@ -1564,14 +1592,19 @@ class SolveSession:
             if self._ai is None:
                 return {"ok": False, "error": "The AI assistant is not set up"}
             # The assistant's tools read this session's snapshot: the same facts the UI shows.
-            result = self._ai.ask(str(payload.get("question", "")), SnapshotContext(self.snapshot))
+            result = self._ai.ask(
+                str(payload.get("question", "")), SnapshotContext(self.snapshot),
+                owner=self.owner, publish=self._publish_event,
+            )
             if not result["ok"]:  # the browser's ack only says "queued", so tell it by event
                 self._publish_event("ai:rejected", {"message": result["error"]})
             return result
         if command == "coach.ask":
             if self._ai is None:
                 return {"ok": False, "error": "The AI assistant is not set up"}
-            result = self._ai.ask_coach(str(payload.get("question", "")))
+            result = self._ai.ask_coach(
+                str(payload.get("question", "")), owner=self.owner, publish=self._publish_event
+            )
             if not result["ok"]:
                 self._publish_event("ai:rejected", {"message": result["error"]})
             return result
@@ -1580,7 +1613,10 @@ class SolveSession:
             self._publish_event("lessons:list", lessons)
             return {"ok": True, "count": len(lessons)}
         if command == "ai.traces":
-            traces = self._ai.recent_traces(int(payload.get("limit", 20))) if self._ai is not None else []
+            traces = (
+                self._ai.recent_traces(int(payload.get("limit", 20)), owner=self.owner)
+                if self._ai is not None else []
+            )
             self._publish_event("ai:traces", traces)
             return {"ok": True, "count": len(traces)}
         if command == "database.check":

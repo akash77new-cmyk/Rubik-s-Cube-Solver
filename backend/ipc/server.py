@@ -195,10 +195,15 @@ class EngineServer:
     # ------------------------------------------------------------------
     # Broadcast
     # ------------------------------------------------------------------
-    def broadcast(self, event: str, data: Any = None) -> None:
-        """Send a JSON event to every subscriber."""
-        payload = encode_json({"event": event, "data": data})
-        self._fanout(payload)
+    def broadcast(self, event: str, data: Any = None, to: Optional[str] = None) -> None:
+        """Send a JSON event to every subscriber.
+
+        ``to`` (Phase 9) names the visitor's session the event is for; the web server then
+        passes it only to that visitor's browser tabs. None = for every visitor."""
+        message: Dict[str, Any] = {"event": event, "data": data}
+        if to is not None:
+            message["to"] = to
+        self._fanout(encode_json(message))
 
     def broadcast_frame(self, jpeg_bytes: bytes) -> None:
         """Send a JPEG frame to subscribers that asked for video."""

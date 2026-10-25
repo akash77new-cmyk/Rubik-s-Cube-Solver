@@ -15,6 +15,11 @@ The engine creates one ``AIService`` and hands it to the session. Two features u
 
 Every run is traced and saved, whether the answer came from the model or from the
 built-in fallback. All features share one request budget, embedding requests included.
+
+Many visitors (Phase 9): one AIService serves every session. Each request names its
+``owner`` (the session key) and the ``publish`` function of that session, so answers go
+only to the visitor who asked, "one question at a time" holds per visitor, and every
+trace records whose run it was. The request budget stays shared: it protects one API key.
 """
 
 from __future__ import annotations
@@ -24,7 +29,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from backend.ai import coach, repair_agent, tutor
 from backend.ai.agent import AgentStopped, AgentTask, run_agent
@@ -55,6 +60,9 @@ REASON_TEXT = {
 }
 
 Publish = Callable[[str, Any], None]
+
+#: The owner of requests that don't name one (tests, tools, the local single-user app).
+DEFAULT_OWNER = "local"
 
 #: The Smart Repair Agent's time limit. A repair needs two Gemini requests, and on
 #: Render one request can take up to ~30 s (a 25 s timeout, then the retry), so a
@@ -106,7 +114,8 @@ class AIService:
         self._logs = logs  # the Logs page (LogBus); optional
         self._off_reason = off_reason
         self._lock = threading.Lock()
-        self._busy = False
+        #: The owners (session keys) with a question being answered right now.
+        self._busy: Set[str] = set()
         self._last_error: Optional[str] = None
         #: The lessons and their search (Phase 7); None = no coach.
         self._lessons = lessons
@@ -141,10 +150,10 @@ class AIService:
         return cls(llm, budget, store, publish, logs, off_reason, lessons)
 
     # ------------------------------------------------------------------
-    def status(self) -> Dict[str, Any]:
-        """For the AI page and every state snapshot (no I/O)."""
+    def status(self, owner: Optional[str] = DEFAULT_OWNER) -> Dict[str, Any]:
+        """For the AI page and every state snapshot (no I/O). ``busy`` is for this owner."""
         with self._lock:
-            busy, last_error = self._busy, self._last_error
+            busy, last_error = owner in self._busy, self._last_error
         return {
             "enabled": self._llm is not None,
             "provider": self._llm.provider if self._llm else None,
@@ -156,40 +165,47 @@ class AIService:
             "lessons": self._lessons.status() if self._lessons is not None else None,
         }
 
-    def ask(self, question: str, context: SnapshotContext) -> Dict[str, Any]:
+    def ask(
+        self, question: str, context: SnapshotContext, owner: str = DEFAULT_OWNER, publish: Optional[Publish] = None,
+    ) -> Dict[str, Any]:
         """Start answering in the background. Returns at once with a run id, or an error."""
         question = " ".join(str(question or "").split())
         if not question:
             return {"ok": False, "error": "Type a question first."}
         if len(question) > self.MAX_QUESTION_LENGTH:
             return {"ok": False, "error": f"Keep questions under {self.MAX_QUESTION_LENGTH} characters."}
+        publish = publish or self._publish
         with self._lock:
-            if self._busy:
+            if owner in self._busy:
                 return {"ok": False, "error": "The assistant is still answering the last question."}
-            self._busy = True
+            self._busy.add(owner)
         run_id = uuid.uuid4().hex[:12]
-        self._publish("ai:status", self.status())
+        publish("ai:status", self.status(owner))
         threading.Thread(
-            target=self._worker, args=(run_id, question, context), name="ai-assistant", daemon=True
+            target=self._worker, args=(run_id, question, context, owner, publish), name="ai-assistant", daemon=True
         ).start()
         return {"ok": True, "runId": run_id}
 
-    def _worker(self, run_id: str, question: str, context: SnapshotContext) -> None:
+    def _worker(self, run_id: str, question: str, context: SnapshotContext, owner: str, publish: Publish) -> None:
         try:
-            self.answer(question, context, run_id)
+            self.answer(question, context, run_id, owner, publish)
         except Exception as exc:  # a bug must not leave the UI waiting forever
             log.exception("The assistant failed")
-            self._publish("ai:answer", {"runId": run_id, "question": question, "error": str(exc)})
+            publish("ai:answer", {"runId": run_id, "question": question, "error": str(exc)})
         finally:
             with self._lock:
-                self._busy = False
-            self._publish("ai:status", self.status())
+                self._busy.discard(owner)
+            publish("ai:status", self.status(owner))
 
-    def answer(self, question: str, context: SnapshotContext, run_id: Optional[str] = None) -> Dict[str, Any]:
+    def answer(
+        self, question: str, context: SnapshotContext, run_id: Optional[str] = None,
+        owner: str = DEFAULT_OWNER, publish: Optional[Publish] = None,
+    ) -> Dict[str, Any]:
         """Answer one question now (the background thread calls this; so do tests)."""
+        publish = publish or self._publish
         run_id = run_id or uuid.uuid4().hex[:12]
-        trace = Trace(run_id, "assistant", question)
-        self._publish("ai:progress", {"runId": run_id, "step": 0, "tool": None})
+        trace = Trace(run_id, "assistant", question, owner=owner)
+        publish("ai:progress", {"runId": run_id, "step": 0, "tool": None})
         source, model, reason = "fallback", None, None
         try:
             if self._llm is None:
@@ -203,7 +219,7 @@ class AIService:
                     BudgetedLLM(self._llm, self._budget),
                     task,
                     trace,
-                    on_progress=lambda step, tool: self._publish(
+                    on_progress=lambda step, tool: publish(
                         "ai:progress", {"runId": run_id, "step": step, "tool": tool}
                     ),
                 )
@@ -234,17 +250,19 @@ class AIService:
             "reason": reason,
             **trace.summary(),
         }
-        self._publish("ai:answer", payload)
+        publish("ai:answer", payload)
         self._log(payload)
         return payload
 
     # ------------------------------------------------------------------
     # The Smart Repair Agent (Phase 5)
     # ------------------------------------------------------------------
-    def repair(self, context: RepairContext, run_id: Optional[str] = None) -> Dict[str, Any]:
+    def repair(
+        self, context: RepairContext, run_id: Optional[str] = None, owner: str = DEFAULT_OWNER,
+    ) -> Dict[str, Any]:
         """Find a fix for an unsolvable cube now (repair_async's thread calls this; so do tests)."""
         run_id = run_id or uuid.uuid4().hex[:12]
-        trace = Trace(run_id, "repair", context.question()[:300])
+        trace = Trace(run_id, "repair", context.question()[:300], owner=owner)
         source, model, reason = "search", None, None
         try:
             if self._llm is None:
@@ -285,12 +303,14 @@ class AIService:
             self._logs.info(f"Repair proposal from {how}: {answer['message']}", source="ai")
         return proposal
 
-    def repair_async(self, context: RepairContext, done: Callable[[Dict[str, Any]], None]) -> None:
+    def repair_async(
+        self, context: RepairContext, done: Callable[[Dict[str, Any]], None], owner: str = DEFAULT_OWNER,
+    ) -> None:
         """Run repair() in a background thread and hand the proposal to ``done``."""
 
         def worker() -> None:
             try:
-                proposal = self.repair(context)
+                proposal = self.repair(context, owner=owner)
             except Exception:  # a bug must not leave the repair card spinning forever
                 log.exception("The repair agent failed")
                 answer = repair_agent.fallback_answer(context, "something went wrong")
@@ -319,7 +339,7 @@ class AIService:
                     self._logs.warn(f"{message} ({status['error']})", source="ai")
                 else:
                     self._logs.info(message, source="ai")
-            self._publish("ai:status", self.status())
+            self._publish("ai:status", self.status(None))  # to everyone: busy is per visitor, so left out
 
         threading.Thread(target=worker, name="ai-lessons", daemon=True).start()
 
@@ -327,7 +347,9 @@ class AIService:
         """Every lesson with its sections, for the Lessons page."""
         return [lesson.to_dict() for lesson in self._lessons.lessons] if self._lessons is not None else []
 
-    def ask_coach(self, question: str) -> Dict[str, Any]:
+    def ask_coach(
+        self, question: str, owner: str = DEFAULT_OWNER, publish: Optional[Publish] = None,
+    ) -> Dict[str, Any]:
         """Like ask(), for the coach: returns at once; the answer comes as a coach:answer event."""
         question = " ".join(str(question or "").split())
         if self._lessons is None:
@@ -336,33 +358,38 @@ class AIService:
             return {"ok": False, "error": "Type a question first."}
         if len(question) > self.MAX_QUESTION_LENGTH:
             return {"ok": False, "error": f"Keep questions under {self.MAX_QUESTION_LENGTH} characters."}
+        publish = publish or self._publish
         with self._lock:
-            if self._busy:
+            if owner in self._busy:
                 return {"ok": False, "error": "The AI is still answering the last question."}
-            self._busy = True
+            self._busy.add(owner)
         run_id = uuid.uuid4().hex[:12]
-        self._publish("ai:status", self.status())
+        publish("ai:status", self.status(owner))
 
         def worker() -> None:
             try:
-                self.coach_answer(question, run_id)
+                self.coach_answer(question, run_id, owner, publish)
             except Exception as exc:  # a bug must not leave the UI waiting forever
                 log.exception("The coach failed")
-                self._publish("coach:answer", {"runId": run_id, "question": question, "error": str(exc)})
+                publish("coach:answer", {"runId": run_id, "question": question, "error": str(exc)})
             finally:
                 with self._lock:
-                    self._busy = False
-                self._publish("ai:status", self.status())
+                    self._busy.discard(owner)
+                publish("ai:status", self.status(owner))
 
         threading.Thread(target=worker, name="ai-coach", daemon=True).start()
         return {"ok": True, "runId": run_id}
 
-    def coach_answer(self, question: str, run_id: Optional[str] = None) -> Dict[str, Any]:
+    def coach_answer(
+        self, question: str, run_id: Optional[str] = None, owner: str = DEFAULT_OWNER,
+        publish: Optional[Publish] = None,
+    ) -> Dict[str, Any]:
         """Answer one question from the lessons now (ask_coach's thread calls this; so do tests)."""
         if self._lessons is None:
             raise RuntimeError("The lessons are not loaded")
+        publish = publish or self._publish
         run_id = run_id or uuid.uuid4().hex[:12]
-        trace = Trace(run_id, "coach", question)
+        trace = Trace(run_id, "coach", question, owner=owner)
         context = CoachContext(self._lessons)
         source, model, reason = "fallback", None, None
         try:
@@ -410,7 +437,7 @@ class AIService:
             "reason": reason,
             **trace.summary(),
         }
-        self._publish("coach:answer", payload)
+        publish("coach:answer", payload)
         if self._logs is not None:
             how = model if source != "fallback" else f"the built-in answer ({reason})"
             self._logs.info(f"Coach answered with {how}, citing {len(payload['citations'])} section(s)", source="ai")
@@ -419,18 +446,22 @@ class AIService:
     # ------------------------------------------------------------------
     # The AI Tutor (Phase 8)
     # ------------------------------------------------------------------
-    def tutor_async(self, context: TutorContext, done: Callable[[Dict[str, Any]], None]) -> Dict[str, Any]:
+    def tutor_async(
+        self, context: TutorContext, done: Callable[[Dict[str, Any]], None], owner: str = DEFAULT_OWNER,
+        publish: Optional[Publish] = None,
+    ) -> Dict[str, Any]:
         """Like ask_coach(): returns at once; ``done`` gets the tutor's answer from a background thread."""
+        publish = publish or self._publish
         with self._lock:
-            if self._busy:
+            if owner in self._busy:
                 return {"ok": False, "error": "The AI is still answering the last question."}
-            self._busy = True
+            self._busy.add(owner)
         run_id = uuid.uuid4().hex[:12]
-        self._publish("ai:status", self.status())
+        publish("ai:status", self.status(owner))
 
         def worker() -> None:
             try:
-                payload = self.tutor_answer(context, run_id)
+                payload = self.tutor_answer(context, run_id, owner)
             except Exception as exc:  # a bug must not leave the Learn page waiting forever
                 log.exception("The tutor failed")
                 answer = context.fallback("something went wrong")
@@ -438,17 +469,19 @@ class AIService:
                            "sources": [], "source": "fallback", "model": None, "reason": str(exc)}
             finally:
                 with self._lock:
-                    self._busy = False
-                self._publish("ai:status", self.status())
+                    self._busy.discard(owner)
+                publish("ai:status", self.status(owner))
             done(payload)
 
         threading.Thread(target=worker, name="ai-tutor", daemon=True).start()
         return {"ok": True, "runId": run_id}
 
-    def tutor_answer(self, context: TutorContext, run_id: Optional[str] = None) -> Dict[str, Any]:
+    def tutor_answer(
+        self, context: TutorContext, run_id: Optional[str] = None, owner: str = DEFAULT_OWNER,
+    ) -> Dict[str, Any]:
         """One tutor request now (tutor_async's thread calls this; so do tests)."""
         run_id = run_id or uuid.uuid4().hex[:12]
-        trace = Trace(run_id, "tutor", (context.question or context.kind)[:300])
+        trace = Trace(run_id, "tutor", (context.question or context.kind)[:300], owner=owner)
         source, model, reason = "fallback", None, None
         try:
             if self._llm is None:
@@ -502,11 +535,11 @@ class AIService:
         """The lessons' search, for the tutor's questions (None = no lessons)."""
         return self._lessons
 
-    def recent_traces(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """The newest traces with their steps (reads the database)."""
+    def recent_traces(self, limit: int = 20, owner: Optional[str] = None) -> List[Dict[str, Any]]:
+        """The newest traces with their steps (reads the database); with ``owner``, only theirs."""
         if self._store is None:
             return []
-        return self._store.recent(max(1, min(int(limit), 50)))
+        return self._store.recent(max(1, min(int(limit), 50)), owner)
 
     # ------------------------------------------------------------------
     @staticmethod
