@@ -1,34 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Cube Solver logo">
-  <defs>
-    <linearGradient id="lt" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#F8FAFC"/><stop offset="100%" stop-color="#CBD5E1"/>
-    </linearGradient>
-    <linearGradient id="ll" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#F97316"/><stop offset="100%" stop-color="#C2410C"/>
-    </linearGradient>
-    <linearGradient id="lr" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#22C55E"/><stop offset="100%" stop-color="#15803D"/>
-    </linearGradient>
-    <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#22D3EE"/><stop offset="100%" stop-color="#8B5CF6"/>
-    </linearGradient>
-    <filter id="lglow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="4" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>
   <rect x="2" y="2" width="124" height="124" rx="30" fill="#0B0B12"/>
-  <rect x="2" y="2" width="124" height="124" rx="30" fill="url(#lg)" opacity="0.16"/>
-  <g filter="url(#lglow)">
-    <path d="M64 20 L108 42 L64 64 L20 42 Z" fill="url(#lt)"/>
-    <path d="M20 42 L64 64 L64 110 L20 88 Z" fill="url(#ll)"/>
-    <path d="M108 42 L108 88 L64 110 L64 64 Z" fill="url(#lr)"/>
+  <path d="M20.00 39.00 L64.00 17.00 L108.00 39.00 L108.00 88.00 L64.00 110.00 L20.00 88.00 Z" fill="#05050A" stroke="#05050A" stroke-width="5" stroke-linejoin="round"/>
+  <g fill="#F8FAFC" stroke="#F8FAFC" stroke-width="1.6" stroke-linejoin="round">
+    <path d="M64.00 59.83 L51.68 53.67 L64.00 47.51 L76.32 53.67 Z"/>
+    <path d="M49.33 52.49 L37.01 46.33 L49.33 40.17 L61.65 46.33 Z"/>
+    <path d="M34.67 45.16 L22.35 39.00 L34.67 32.84 L46.99 39.00 Z"/>
+    <path d="M78.67 52.49 L66.35 46.33 L78.67 40.17 L90.99 46.33 Z"/>
+    <path d="M64.00 45.16 L51.68 39.00 L64.00 32.84 L76.32 39.00 Z"/>
+    <path d="M49.33 37.83 L37.01 31.67 L49.33 25.51 L61.65 31.67 Z"/>
+    <path d="M93.33 45.16 L81.01 39.00 L93.33 32.84 L105.65 39.00 Z"/>
+    <path d="M78.67 37.83 L66.35 31.67 L78.67 25.51 L90.99 31.67 Z"/>
+    <path d="M64.00 30.49 L51.68 24.33 L64.00 18.17 L76.32 24.33 Z"/>
   </g>
-  <g stroke="#0B0B12" stroke-opacity="0.45" stroke-width="2.5" fill="none">
-    <path d="M49 27 L93 49 M79 27 L35 49"/>
-    <path d="M20 57 L64 79 M20 73 L64 95"/>
-    <path d="M108 57 L64 79 M108 73 L64 95"/>
-    <path d="M35 51 L35 96 M49 58 L49 103"/>
-    <path d="M93 51 L93 96 M79 58 L79 103"/>
+  <g fill="#1EAD53" stroke="#1EAD53" stroke-width="1.6" stroke-linejoin="round">
+    <path d="M62.83 61.72 L50.51 55.56 L50.51 69.28 L62.83 75.44 Z"/>
+    <path d="M48.16 54.39 L35.84 48.23 L35.84 61.95 L48.16 68.11 Z"/>
+    <path d="M33.49 47.05 L21.17 40.89 L21.17 54.61 L33.49 60.77 Z"/>
+    <path d="M62.83 78.05 L50.51 71.89 L50.51 85.61 L62.83 91.77 Z"/>
+    <path d="M48.16 70.72 L35.84 64.56 L35.84 78.28 L48.16 84.44 Z"/>
+    <path d="M33.49 63.39 L21.17 57.23 L21.17 70.95 L33.49 77.11 Z"/>
+    <path d="M62.83 94.39 L50.51 88.23 L50.51 101.95 L62.83 108.11 Z"/>
+    <path d="M48.16 87.05 L35.84 80.89 L35.84 94.61 L48.16 100.77 Z"/>
+    <path d="M33.49 79.72 L21.17 73.56 L21.17 87.28 L33.49 93.44 Z"/>
+  </g>
+  <g fill="#A73030" stroke="#A73030" stroke-width="1.6" stroke-linejoin="round">
+    <path d="M65.17 61.72 L77.49 55.56 L77.49 69.28 L65.17 75.44 Z"/>
+    <path d="M79.84 54.39 L92.16 48.23 L92.16 61.95 L79.84 68.11 Z"/>
+    <path d="M94.51 47.05 L106.83 40.89 L106.83 54.61 L94.51 60.77 Z"/>
+    <path d="M65.17 78.05 L77.49 71.89 L77.49 85.61 L65.17 91.77 Z"/>
+    <path d="M79.84 70.72 L92.16 64.56 L92.16 78.28 L79.84 84.44 Z"/>
+    <path d="M94.51 63.39 L106.83 57.23 L106.83 70.95 L94.51 77.11 Z"/>
+    <path d="M65.17 94.39 L77.49 88.23 L77.49 101.95 L65.17 108.11 Z"/>
+    <path d="M79.84 87.05 L92.16 80.89 L92.16 94.61 L79.84 100.77 Z"/>
+    <path d="M94.51 79.72 L106.83 73.56 L106.83 87.28 L94.51 93.44 Z"/>
   </g>
 </svg>

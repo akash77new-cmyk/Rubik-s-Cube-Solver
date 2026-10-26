@@ -259,43 +259,67 @@ def build_sticker_svg(name: str) -> str:
 """
 
 
+Point = Tuple[float, float]
+
+#: The logo's cube: the front corner of the top face, and the three edge directions
+#: from it (isometric). Every sticker is placed from these, so the grid always lines up.
+LOGO_CORNER: Point = (64.0, 61.0)
+LOGO_LEFT: Point = (-44.0, -22.0)   # along the top face, towards the back-left
+LOGO_RIGHT: Point = (44.0, -22.0)   # along the top face, towards the back-right
+LOGO_DOWN: Point = (0.0, 49.0)      # down the front edge
+LOGO_GAP = 0.08                     # space between stickers, as a fraction of one sticker
+
+
+def _logo_face(first: Point, second: Point, color: str, shade: float) -> str:
+    """The 9 stickers of one visible face, spanned by two edge directions from the corner.
+
+    ``shade`` (0..1) darkens the face, so the three faces read as lit from above.
+    """
+    channels = [int(color[i:i + 2], 16) for i in (1, 3, 5)]
+    color = "#" + "".join(f"{round(c * (1 - shade)):02X}" for c in channels)
+    cx, cy = LOGO_CORNER
+    stickers: List[str] = []
+    for row in range(3):
+        for col in range(3):
+            corners = []
+            for a, b in ((row, col), (row, col + 1), (row + 1, col + 1), (row + 1, col)):
+                # Pull each corner towards the sticker's middle to leave a gap.
+                s = (a + (LOGO_GAP if a == row else -LOGO_GAP)) / 3
+                t = (b + (LOGO_GAP if b == col else -LOGO_GAP)) / 3
+                corners.append(f"{cx + s * first[0] + t * second[0]:.2f} {cy + s * first[1] + t * second[1]:.2f}")
+            stickers.append(f'    <path d="M{" L".join(corners)} Z"/>')
+    return (
+        f'  <g fill="{color}" stroke="{color}" stroke-width="1.6" stroke-linejoin="round">\n'
+        + "\n".join(stickers)
+        + "\n  </g>\n"
+    )
+
+
 def build_logo_svg() -> str:
-    """Isometric cube mark used in the header and as the favicon."""
-    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Cube Solver logo">
-  <defs>
-    <linearGradient id="lt" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#F8FAFC"/><stop offset="100%" stop-color="#CBD5E1"/>
-    </linearGradient>
-    <linearGradient id="ll" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#F97316"/><stop offset="100%" stop-color="#C2410C"/>
-    </linearGradient>
-    <linearGradient id="lr" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#22C55E"/><stop offset="100%" stop-color="#15803D"/>
-    </linearGradient>
-    <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="{ACCENT_2}"/><stop offset="100%" stop-color="{ACCENT}"/>
-    </linearGradient>
-    <filter id="lglow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="4" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>
-  <rect x="2" y="2" width="124" height="124" rx="30" fill="{INK}"/>
-  <rect x="2" y="2" width="124" height="124" rx="30" fill="url(#lg)" opacity="0.16"/>
-  <g filter="url(#lglow)">
-    <path d="M64 20 L108 42 L64 64 L20 42 Z" fill="url(#lt)"/>
-    <path d="M20 42 L64 64 L64 110 L20 88 Z" fill="url(#ll)"/>
-    <path d="M108 42 L108 88 L64 110 L64 64 Z" fill="url(#lr)"/>
-  </g>
-  <g stroke="{INK}" stroke-opacity="0.45" stroke-width="2.5" fill="none">
-    <path d="M49 27 L93 49 M79 27 L35 49"/>
-    <path d="M20 57 L64 79 M20 73 L64 95"/>
-    <path d="M108 57 L64 79 M108 73 L64 95"/>
-    <path d="M35 51 L35 96 M49 58 L49 103"/>
-    <path d="M93 51 L93 96 M79 58 L79 103"/>
-  </g>
-</svg>
-"""
+    """A solved 3x3 cube in isometric view (white on top, green in front, red on the right),
+    used as the README logo, in the header and as the favicon."""
+    cx, cy = LOGO_CORNER
+    left_back = (cx + LOGO_LEFT[0], cy + LOGO_LEFT[1])
+    right_back = (cx + LOGO_RIGHT[0], cy + LOGO_RIGHT[1])
+    outline = [  # the cube's silhouette: a hexagon, filled dark behind the stickers
+        left_back,
+        (left_back[0] + LOGO_RIGHT[0], left_back[1] + LOGO_RIGHT[1]),
+        right_back,
+        (right_back[0] + LOGO_DOWN[0], right_back[1] + LOGO_DOWN[1]),
+        (cx + LOGO_DOWN[0], cy + LOGO_DOWN[1]),
+        (left_back[0] + LOGO_DOWN[0], left_back[1] + LOGO_DOWN[1]),
+    ]
+    body = " L".join(f"{x:.2f} {y:.2f}" for x, y in outline)
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" '
+        'role="img" aria-label="Cube Solver logo">\n'
+        f'  <rect x="2" y="2" width="124" height="124" rx="30" fill="{INK}"/>\n'
+        f'  <path d="M{body} Z" fill="#05050A" stroke="#05050A" stroke-width="5" stroke-linejoin="round"/>\n'
+        + _logo_face(LOGO_RIGHT, LOGO_LEFT, STICKER_COLORS["white"][0], 0.0)    # top
+        + _logo_face(LOGO_DOWN, LOGO_LEFT, STICKER_COLORS["green"][0], 0.12)    # front (left)
+        + _logo_face(LOGO_DOWN, LOGO_RIGHT, STICKER_COLORS["red"][0], 0.30)     # right
+        + "</svg>\n"
+    )
 
 
 # --------------------------------------------------------------------------------------
