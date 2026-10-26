@@ -346,7 +346,7 @@ def generate() -> List[Path]:
     for name in STICKER_COLORS:
         written.append(write(stickers / f"{name}.svg", build_sticker_svg(name)))
 
-    written.append(write(ASSETS / "brand" / "logo.svg", build_logo_svg()))
+    written.append(write(ASSETS / "brand" / "cube-logo.svg", build_logo_svg()))
     return written
 
 

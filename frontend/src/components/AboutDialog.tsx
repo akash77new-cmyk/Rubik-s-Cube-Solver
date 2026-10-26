@@ -86,7 +86,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
         onClick={(event) => event.stopPropagation()}
       >
         <header className="modal-head">
-          <img src="/assets-lib/brand/logo.svg" alt="" width={40} height={40} />
+          <img src="/assets-lib/brand/cube-logo.svg" alt="" width={40} height={40} />
           <div>
             <h2 style={{ fontSize: 17 }}>Real-Time Rubik's Cube Solver</h2>
             <p style={{ fontSize: 12.5, color: "var(--ink-3)" }}>

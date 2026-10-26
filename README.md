@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/brand/logo.svg" width="92" alt="CubeSolver logo" />
+<img src="assets/brand/cube-logo.svg" width="92" alt="CubeSolver logo" />
 
 # Real-Time Rubik's Cube Solver
 

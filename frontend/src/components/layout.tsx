@@ -101,7 +101,7 @@ export const PAGE_META: Record<PageId, { title: string; subtitle: string }> = {
 export function BrandCell({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   return (
     <div className="brand-cell">
-      <img className="brand-logo" src="/assets-lib/brand/logo.svg" alt="" width={34} height={34} />
+      <img className="brand-logo" src="/assets-lib/brand/cube-logo.svg" alt="" width={34} height={34} />
       <div className="brand-text">
         <div className="brand-name">CubeSolver</div>
         <div className="brand-sub">vision · kociemba</div>
